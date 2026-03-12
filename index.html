@@ -489,115 +489,158 @@ async function refreshStop(letter) {
   btn && btn.classList.remove('spinning');
 }
 
-// ── TRAIN FETCH ───────────────────────────────────────────────────────────────
-async function fetchTrains() {
-  const tapiUrl = `https://transportapi.com/v3/uk/train/station/RYP/live.json` +
-    `?app_id=${TAPI_APP_ID}&app_key=${TAPI_APP_KEY}&darwin=true&train_status=passenger&type=departure`;
+// ── TRAIN FETCH (OpenLDBWS SOAP) ──────────────────────────────────────────────
+const LDBWS_TOKEN = '96a52d00-d2b0-4f46-8748-6ee6ab4bcf9b';
+const LDBWS_URL   = 'https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb6.asmx';
 
-  // Try TransportAPI directly, then via CORS proxy, then TfL fallback
-  const attempts = [
-    tapiUrl,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(tapiUrl)}`,
-  ];
-
-  for (const url of attempts) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data && data.departures) {
-        renderTrainData(data);
-        return;
-      }
-    } catch(e) {
-      console.warn('Train attempt failed:', e.message);
-    }
-  }
-
-  // Final fallback: TfL national-rail endpoint for Raynes Park
-  await fetchTrainsTfL();
+function buildSoapRequest(numRows, crs) {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+               xmlns:ldb="http://thalesgroup.com/RTTI/2017-02-02/ldb/"
+               xmlns:ct="http://thalesgroup.com/RTTI/2010-11-01/ldb/commontypes">
+  <soap:Header>
+    <ct:AccessToken>
+      <ct:TokenValue>${LDBWS_TOKEN}</ct:TokenValue>
+    </ct:AccessToken>
+  </soap:Header>
+  <soap:Body>
+    <ldb:GetDepBoardWithDetailsRequest>
+      <ldb:numRows>${numRows}</ldb:numRows>
+      <ldb:crs>${crs}</ldb:crs>
+    </ldb:GetDepBoardWithDetailsRequest>
+  </soap:Body>
+</soap:Envelope>`;
 }
 
-function renderTrainData(data) {
-  const deps = data.departures?.all || [];
+function getXmlText(el, tag) {
+  // Try with various namespace prefixes or no prefix
+  const found = el.getElementsByTagNameNS('*', tag);
+  if (found.length) return found[0].textContent.trim();
+  return null;
+}
+
+function parseTrainXml(xmlText) {
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(xmlText, 'text/xml');
+
+  // Check for SOAP fault
+  const fault = xml.getElementsByTagNameNS('*', 'Fault');
+  if (fault.length) {
+    const msg = xml.getElementsByTagNameNS('*', 'faultstring');
+    throw new Error('SOAP Fault: ' + (msg[0]?.textContent || 'unknown'));
+  }
+
+  const services = xml.getElementsByTagNameNS('*', 'service');
   const byP = {1:[],2:[],3:[],4:[]};
   let affected = 0;
 
-  deps.forEach(d => {
-    const p = parseInt(d.platform);
-    if (p >= 1 && p <= 4) {
-      const aimed = d.aimed_departure_time || d.aimed_arrival_time;
-      const exp   = d.expected_departure_time || d.expected_arrival_time || aimed;
-      const mins  = minsFromNow(exp);
-      const late  = d.status === 'LATE' || d.status === 'DELAYED';
-      const cancelled = d.status === 'CANCELLED';
-      if (cancelled || late) affected++;
-      if (mins !== null && mins >= -1 && !cancelled) {
-        byP[p].push({
-          route: 'SWR',
-          dest:  d.destination_name || '—',
-          mins,
-          time:  fmtTime(exp),
-          note:  late ? '⚠ delayed' : null,
-        });
-      }
+  Array.from(services).forEach(svc => {
+    const platform = getXmlText(svc, 'platform');
+    const p = parseInt(platform);
+    if (!p || p < 1 || p > 4) return;
+
+    const std  = getXmlText(svc, 'std');  // scheduled departure
+    const etd  = getXmlText(svc, 'etd');  // expected departure
+    const isCancelled = etd === 'Cancelled';
+    const isDelayed   = etd && etd !== 'On time' && etd !== 'Cancelled' && etd !== std;
+
+    if (isCancelled) { affected++; return; }
+    if (isDelayed) affected++;
+
+    // Destination: may be multiple (split services) — take first
+    const destNodes = svc.getElementsByTagNameNS('*', 'destination');
+    let destName = '—';
+    if (destNodes.length) {
+      const loc = destNodes[0].getElementsByTagNameNS('*', 'location');
+      if (loc.length) destName = getXmlText(loc[0], 'locationName') || '—';
     }
+
+    // Display time: use etd if it looks like a time, else std
+    const displayTime = (etd && etd.match(/^\d{2}:\d{2}$/)) ? etd : std || '--:--';
+    const mins = minsFromNow(displayTime);
+    if (mins === null || mins < -2) return;
+
+    byP[p].push({
+      route: 'SWR',
+      dest:  destName,
+      mins:  mins,
+      time:  displayTime,
+      note:  isDelayed ? `⚠ was ${std}` : (etd === 'On time' ? null : null),
+    });
   });
 
-  for (let p = 1; p <= 4; p++) {
-    renderDeps('deps-T' + p, byP[p].sort((a,b)=>a.mins-b.mins).slice(0,4), true);
-  }
+  // Disruption messages
+  const msgNodes = xml.getElementsByTagNameNS('*', 'message');
+  const messages = Array.from(msgNodes).map(m => {
+    // Strip HTML tags from message
+    const div = document.createElement('div');
+    div.innerHTML = m.textContent;
+    return div.textContent.trim();
+  }).filter(Boolean);
 
-  const alertEl = document.getElementById('train-alert');
-  if (affected > 0) {
-    document.getElementById('train-alert-text').textContent =
-      `${affected} service(s) affected — check National Rail for details.`;
-    alertEl.classList.add('visible');
-  } else {
-    alertEl.classList.remove('visible');
-  }
-  setUpdated();
+  return { byP, affected, messages };
 }
 
-async function fetchTrainsTfL() {
-  try {
-    // TfL StopPoint ID for Raynes Park national rail
-    const res = await fetch(
-      `https://api.tfl.gov.uk/StopPoint/910GRAYNSPK/arrivals?app_key=${TFL_KEY}`
-    );
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (!data || !data.length) throw new Error('empty');
+async function fetchTrains() {
+  const soapBody = buildSoapRequest(20, 'RYP');
 
-    const byP = {1:[],2:[],3:[],4:[]};
-    data.forEach(d => {
-      const p = parseInt(d.platformName);
-      if (p >= 1 && p <= 4) {
-        byP[p].push({
-          route: d.lineName || 'SWR',
-          dest:  d.destinationName || d.towards || '—',
-          mins:  Math.round(d.timeToStation / 60),
-          time:  fmtTime(d.expectedArrival),
-          note:  null,
-        });
+  // Try direct first, then CORS proxy
+  const attempts = [
+    { url: LDBWS_URL, direct: true },
+    { url: `https://api.allorigins.win/raw?url=${encodeURIComponent(LDBWS_URL)}`, direct: false },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(attempt.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': attempt.direct ? 'text/xml; charset=utf-8' : 'text/plain',
+          'SOAPAction': '"http://thalesgroup.com/RTTI/2017-02-02/ldb/GetDepBoardWithDetails"',
+        },
+        body: soapBody,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      if (!text.includes('Envelope')) throw new Error('Not a SOAP response');
+
+      const { byP, affected, messages } = parseTrainXml(text);
+
+      for (let p = 1; p <= 4; p++) {
+        renderDeps('deps-T' + p, byP[p].sort((a,b) => a.mins - b.mins).slice(0,4), true);
       }
-    });
-    for (let p = 1; p <= 4; p++) {
-      renderDeps('deps-T' + p, byP[p].sort((a,b)=>a.mins-b.mins).slice(0,4), true);
+
+      const alertEl  = document.getElementById('train-alert');
+      const alertTxt = document.getElementById('train-alert-text');
+      if (affected > 0 || messages.length > 0) {
+        alertTxt.textContent = messages.length
+          ? messages[0]
+          : `${affected} service(s) affected — check National Rail for details.`;
+        alertEl.classList.add('visible');
+      } else {
+        alertEl.classList.remove('visible');
+      }
+
+      setUpdated();
+      return; // success — stop trying
+
+    } catch(e) {
+      console.warn('Train fetch attempt failed:', attempt.url, e.message);
     }
-    setUpdated();
-  } catch(e) {
-    console.error('TfL train fallback failed:', e);
-    for (let p = 1; p <= 4; p++) {
-      document.getElementById('deps-T' + p).innerHTML =
-        `<div class="state-row">
-          Live data unavailable —
-          <a href="https://www.nationalrail.co.uk/stations/RYP" target="_blank"
-             style="color:var(--accent-blue);text-decoration:none">
-            Check National Rail ↗
-          </a>
-        </div>`;
-    }
+  }
+
+  // All attempts failed
+  for (let p = 1; p <= 4; p++) {
+    document.getElementById('deps-T' + p).innerHTML =
+      `<div class="state-row">
+        Live data unavailable —
+        <a href="https://www.nationalrail.co.uk/stations/RYP" target="_blank"
+           style="color:var(--accent-blue);text-decoration:none">
+          Check National Rail ↗
+        </a>
+      </div>`;
   }
 }
 
