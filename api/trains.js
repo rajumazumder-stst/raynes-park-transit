@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     }
 
     const { services, messages } = parseXml(xmlText);
-    res.status(200).json({ services, messages, raw: xmlText.slice(0, 300) });
+    res.status(200).json({ services, messages });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
