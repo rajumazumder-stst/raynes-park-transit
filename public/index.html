@@ -18,6 +18,9 @@
       --accent-teal: #00c9a7;
       --accent-amber:#ffb340;
       --accent-red:  #ff4d6a;
+      --accent-green:#00e676;
+      --highlight-bg:rgba(0,230,118,0.08);
+      --highlight-border:rgba(0,230,118,0.3);
       --text-primary:#e8f0fc;
       --text-dim:    #6a85aa;
       --text-mid:    #9ab0cc;
@@ -27,161 +30,126 @@
       --radius-sm:   8px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg-deep);
-      color: var(--text-primary);
-      font-family: var(--font-body);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+    body { background: var(--bg-deep); color: var(--text-primary); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
     body::before {
-      content: '';
-      position: fixed; inset: 0; z-index: 0;
-      background-image:
-        linear-gradient(rgba(42,127,255,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(42,127,255,0.04) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
+      content: ''; position: fixed; inset: 0; z-index: 0;
+      background-image: linear-gradient(rgba(42,127,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(42,127,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none;
     }
     #app { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 0 16px 40px; }
 
-    header {
-      padding: 28px 0 20px;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 24px;
-    }
+    /* HEADER */
+    header { padding: 24px 0 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
     .logo { display: flex; align-items: center; gap: 12px; }
-    .logo-icon {
-      width: 38px; height: 38px;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-    }
-    .logo-text { font-family: var(--font-mono); font-size: 15px; font-weight: 700; letter-spacing: 0.04em; }
-    .logo-sub  { font-size: 11px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
-    .header-right { display: flex; align-items: center; gap: 12px; }
-    #clock {
-      font-family: var(--font-mono); font-size: 22px; font-weight: 700;
-      color: var(--accent-teal); letter-spacing: 0.04em;
-    }
-    #last-updated { font-size: 11px; color: var(--text-dim); text-align: right; }
+    .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .logo-text { font-family: var(--font-mono); font-size: 14px; font-weight: 700; letter-spacing: 0.04em; }
+    .logo-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
+    #clock { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--accent-teal); letter-spacing: 0.04em; }
+    #last-updated { font-size: 10px; color: var(--text-dim); text-align: right; }
 
-    .tabs { display: flex; gap: 6px; margin-bottom: 24px; }
-    .tab {
-      flex: 1; padding: 12px 8px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text-dim);
-      font-family: var(--font-mono); font-size: 13px; font-weight: 700;
-      letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; text-align: center;
+    /* TOP TABS (Buses / Rail & Tube) */
+    .top-tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+    .top-tab {
+      flex: 1; padding: 11px 8px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 12px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; text-align: center;
     }
-    .tab:hover { border-color: var(--accent-blue); color: var(--text-primary); }
-    .tab.active {
-      background: linear-gradient(135deg, rgba(42,127,255,0.18), rgba(0,201,167,0.1));
-      border-color: var(--accent-blue); color: var(--accent-teal);
-    }
-    .tab-icon { font-size: 16px; display: block; margin-bottom: 4px; }
+    .top-tab:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .top-tab.active { background: linear-gradient(135deg, rgba(42,127,255,0.18), rgba(0,201,167,0.1)); border-color: var(--accent-blue); color: var(--accent-teal); }
+    .tab-icon { font-size: 15px; display: block; margin-bottom: 3px; }
 
-    .alert-banner {
-      background: rgba(255,77,106,0.1); border: 1px solid rgba(255,77,106,0.35);
-      border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 20px;
-      font-size: 13px; color: #ff8fa0; display: none; align-items: flex-start; gap: 10px;
+    /* STATION SCROLL TABS */
+    .station-tabs-wrap { overflow-x: auto; margin-bottom: 20px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .station-tabs-wrap::-webkit-scrollbar { display: none; }
+    .station-tabs { display: flex; gap: 6px; padding-bottom: 2px; width: max-content; }
+    .station-tab {
+      padding: 8px 14px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 20px; color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.05em; cursor: pointer;
+      transition: all 0.2s; white-space: nowrap;
     }
+    .station-tab:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .station-tab.active { background: rgba(255,179,64,0.15); border-color: var(--accent-amber); color: var(--accent-amber); }
+
+    /* FILTER BAR */
+    .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 12px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 16px; color: var(--text-dim); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px;
+    }
+    .filter-btn:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .filter-btn.active { background: var(--highlight-bg); border-color: var(--highlight-border); color: var(--accent-green); }
+    .filter-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-green); flex-shrink: 0; }
+
+    /* ALERT */
+    .alert-banner { background: rgba(255,77,106,0.1); border: 1px solid rgba(255,77,106,0.35); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: #ff8fa0; display: none; align-items: flex-start; gap: 10px; }
     .alert-banner.visible { display: flex; }
-    .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .alert-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
     .alert-text { line-height: 1.5; }
 
-    .section-label {
-      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-      letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--text-dim); margin-bottom: 12px; padding-left: 2px;
-    }
+    /* SECTION LABEL */
+    .section-label { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; padding-left: 2px; }
 
-    .stop-card {
-      background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: var(--radius); margin-bottom: 14px; overflow: hidden;
-      transition: border-color 0.2s;
-    }
+    /* STOP CARD */
+    .stop-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; transition: border-color 0.2s; }
     .stop-card:hover { border-color: rgba(42,127,255,0.4); }
-    .stop-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 13px 16px; background: var(--bg-card2); border-bottom: 1px solid var(--border);
-    }
+    .stop-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-card2); border-bottom: 1px solid var(--border); }
     .stop-name-row { display: flex; align-items: center; gap: 10px; }
-    .stop-badge {
-      width: 28px; height: 28px;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal));
-      border-radius: 6px; display: flex; align-items: center; justify-content: center;
-      font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0;
-    }
+    .stop-badge { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-teal)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
     .stop-badge.train { background: linear-gradient(135deg, var(--accent-amber), #ff8c42); }
-    .stop-name { font-size: 14px; font-weight: 600; }
-    .stop-routes { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-    .stop-refresh-btn {
-      background: none; border: 1px solid var(--border); border-radius: 6px;
-      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-      cursor: pointer; color: var(--text-dim); font-size: 14px; transition: all 0.2s;
-    }
+    .stop-badge.tube  { background: linear-gradient(135deg, #e01c1c, #c01010); }
+    .stop-name  { font-size: 13px; font-weight: 600; }
+    .stop-sub   { font-size: 11px; color: var(--text-mid); margin-top: 1px; }
+    .stop-routes{ font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+    .stop-refresh-btn { background: none; border: 1px solid var(--border); border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-dim); font-size: 14px; transition: all 0.2s; }
     .stop-refresh-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
     .stop-refresh-btn.spinning { animation: spin 0.6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .departure-row {
-      display: grid; grid-template-columns: 52px 1fr auto auto;
-      align-items: center; gap: 10px; padding: 10px 16px;
-      border-bottom: 1px solid rgba(30,48,80,0.6); transition: background 0.15s;
-    }
+    /* DEPARTURE ROW */
+    .departure-row { display: grid; grid-template-columns: 52px 1fr auto auto; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid rgba(30,48,80,0.6); transition: background 0.15s; }
     .departure-row:last-child { border-bottom: none; }
     .departure-row:hover { background: rgba(42,127,255,0.04); }
-    .route-pill {
-      display: inline-flex; align-items: center; justify-content: center;
-      background: rgba(42,127,255,0.15); border: 1px solid rgba(42,127,255,0.3);
-      border-radius: 5px; font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-      color: var(--accent-blue); padding: 3px 6px; min-width: 44px; text-align: center;
-    }
-    .route-pill.train {
-      background: rgba(255,179,64,0.12); border-color: rgba(255,179,64,0.3); color: var(--accent-amber);
-    }
-    .destination { font-size: 14px; font-weight: 500; }
-    .dep-note { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-    .dep-time { font-family: var(--font-mono); font-size: 12px; color: var(--text-mid); text-align: right; }
-    .dep-mins { font-family: var(--font-mono); font-size: 15px; font-weight: 700; text-align: right; min-width: 48px; }
+    .departure-row.highlight { background: var(--highlight-bg); border-left: 2px solid var(--accent-green); padding-left: 12px; }
+    .departure-row.highlight:hover { background: rgba(0,230,118,0.12); }
+
+    .route-pill { display: inline-flex; align-items: center; justify-content: center; background: rgba(42,127,255,0.15); border: 1px solid rgba(42,127,255,0.3); border-radius: 5px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-blue); padding: 3px 5px; min-width: 42px; text-align: center; }
+    .route-pill.train { background: rgba(255,179,64,0.12); border-color: rgba(255,179,64,0.3); color: var(--accent-amber); }
+    .route-pill.tube  { background: rgba(224,28,28,0.12); border-color: rgba(224,28,28,0.3); color: #ff6b6b; }
+
+    .dest-wrap { min-width: 0; }
+    .destination { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dest-highlight-badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; background: var(--accent-green); color: #000; border-radius: 3px; padding: 1px 4px; margin-left: 5px; vertical-align: middle; text-transform: uppercase; }
+    .dep-note { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+    .dep-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-mid); text-align: right; }
+    .dep-mins { font-family: var(--font-mono); font-size: 14px; font-weight: 700; text-align: right; min-width: 46px; }
     .dep-mins.due    { color: var(--accent-red); }
     .dep-mins.soon   { color: var(--accent-amber); }
     .dep-mins.normal { color: var(--accent-teal); }
 
-    .state-row { padding: 20px 16px; text-align: center; color: var(--text-dim); font-size: 13px; }
-    .loading-dots span {
-      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent-blue); margin: 0 3px; animation: bounce 1.2s infinite;
-    }
+    /* STATES */
+    .state-row { padding: 18px 14px; text-align: center; color: var(--text-dim); font-size: 13px; }
+    .loading-dots span { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-blue); margin: 0 3px; animation: bounce 1.2s infinite; }
     .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
     .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bounce {
-      0%,80%,100% { transform: translateY(0); opacity: 0.4; }
-      40%          { transform: translateY(-6px); opacity: 1; }
-    }
+    @keyframes bounce { 0%,80%,100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-6px); opacity: 1; } }
 
-    .stop-grid { display: grid; gap: 14px; }
+    /* GRID */
+    .stop-grid { display: grid; gap: 12px; }
     @media (min-width: 640px) { .stop-grid.two-col { grid-template-columns: 1fr 1fr; } }
 
+    /* PANELS */
     .panel { display: none; }
     .panel.active { display: block; }
+    .station-panel { display: none; }
+    .station-panel.active { display: block; }
 
-    .status-dot {
-      width: 7px; height: 7px; border-radius: 50%; background: var(--accent-teal);
-      display: inline-block; margin-right: 6px; box-shadow: 0 0 6px var(--accent-teal);
-      animation: pulse-dot 2s infinite;
-    }
+    /* STATUS DOT */
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-teal); display: inline-block; margin-right: 5px; box-shadow: 0 0 6px var(--accent-teal); animation: pulse-dot 2s infinite; }
     @keyframes pulse-dot { 0%,100% { opacity:1; } 50% { opacity: 0.4; } }
 
-    footer {
-      text-align: center; font-size: 11px; color: var(--text-dim);
-      margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border);
-    }
+    footer { text-align: center; font-size: 11px; color: var(--text-dim); margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--border); }
     footer a { color: var(--accent-blue); text-decoration: none; }
   </style>
 </head>
@@ -196,33 +164,30 @@
         <div class="logo-sub">Live Transit Board</div>
       </div>
     </div>
-    <div class="header-right">
-      <div>
-        <div id="clock">--:--</div>
-        <div id="last-updated"><span class="status-dot"></span>Live</div>
-      </div>
+    <div>
+      <div id="clock">--:--</div>
+      <div id="last-updated"><span class="status-dot"></span>Live</div>
     </div>
   </header>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showPanel('buses',this)">
-      <span class="tab-icon">🚌</span>BUSES
-    </button>
-    <button class="tab" onclick="showPanel('trains',this)">
-      <span class="tab-icon">🚆</span>TRAINS
-    </button>
+  <!-- TOP TABS -->
+  <div class="top-tabs">
+    <button class="top-tab active" onclick="showTopPanel('buses',this)"><span class="tab-icon">🚌</span>BUSES</button>
+    <button class="top-tab" onclick="showTopPanel('rail',this)"><span class="tab-icon">🚆</span>RAIL &amp; TUBE</button>
   </div>
 
-  <!-- BUSES PANEL -->
+  <!-- ═══════════════════════════════════════ BUSES PANEL ══ -->
   <div id="panel-buses" class="panel active">
-    <div class="section-label">Bushey Road / Grand Drive</div>
+
+    <div class="section-label">Bushey Road</div>
     <div class="stop-grid two-col">
       <div class="stop-card">
         <div class="stop-header">
           <div class="stop-name-row">
             <div class="stop-badge">M</div>
             <div>
-              <div class="stop-name">Bushey Rd / Grand Drive</div>
+              <div class="stop-name">Bushey Road/Grand Drive</div>
+              <div class="stop-sub">Bushey Road – eastbound</div>
               <div class="stop-routes">152 · 655 · K5</div>
             </div>
           </div>
@@ -235,24 +200,54 @@
           <div class="stop-name-row">
             <div class="stop-badge">U</div>
             <div>
-              <div class="stop-name">Bushey Rd / Grand Drive</div>
+              <div class="stop-name">Bushey Road/Grand Drive</div>
+              <div class="stop-sub">Bushey Road – westbound</div>
               <div class="stop-routes">152 · 655 · K5</div>
             </div>
           </div>
-          <button class="stop-refresh-btn" id="btn-U" onclick="refreshStop('U')" title="Refresh">↻</button>
+          <button class="stop-refresh-btn" id="btn-U1" onclick="refreshStop('U1')" title="Refresh">↻</button>
         </div>
-        <div id="deps-U"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
+        <div id="deps-U1"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
       </div>
     </div>
 
-    <div class="section-label" style="margin-top:8px">Raynes Park Station Area</div>
+    <div class="section-label" style="margin-top:6px">Raynes Park Station</div>
     <div class="stop-grid two-col">
+      <div class="stop-card">
+        <div class="stop-header">
+          <div class="stop-name-row">
+            <div class="stop-badge">S</div>
+            <div>
+              <div class="stop-name">Raynes Park Station</div>
+              <div class="stop-sub">Approach Road – westbound</div>
+              <div class="stop-routes">152 · 163 · K5</div>
+            </div>
+          </div>
+          <button class="stop-refresh-btn" id="btn-S" onclick="refreshStop('S')" title="Refresh">↻</button>
+        </div>
+        <div id="deps-S"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
+      </div>
+      <div class="stop-card">
+        <div class="stop-header">
+          <div class="stop-name-row">
+            <div class="stop-badge">P</div>
+            <div>
+              <div class="stop-name">Raynes Park Station</div>
+              <div class="stop-sub">Approach Road – eastbound</div>
+              <div class="stop-routes">152 · 163 · K5</div>
+            </div>
+          </div>
+          <button class="stop-refresh-btn" id="btn-P" onclick="refreshStop('P')" title="Refresh">↻</button>
+        </div>
+        <div id="deps-P"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
+      </div>
       <div class="stop-card">
         <div class="stop-header">
           <div class="stop-name-row">
             <div class="stop-badge">H</div>
             <div>
-              <div class="stop-name">Coombe Lane Westbound</div>
+              <div class="stop-name">Raynes Park Station</div>
+              <div class="stop-sub">Coombe Lane – westbound</div>
               <div class="stop-routes">57 · 131 · 200 · N87</div>
             </div>
           </div>
@@ -265,7 +260,8 @@
           <div class="stop-name-row">
             <div class="stop-badge">B</div>
             <div>
-              <div class="stop-name">Coombe Lane Eastbound</div>
+              <div class="stop-name">Raynes Park Station</div>
+              <div class="stop-sub">Coombe Lane – eastbound</div>
               <div class="stop-routes">57 · 131 · 200 · N87</div>
             </div>
           </div>
@@ -273,119 +269,113 @@
         </div>
         <div id="deps-B"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
       </div>
-      <div class="stop-card">
-        <div class="stop-header">
-          <div class="stop-name-row">
-            <div class="stop-badge">P</div>
-            <div>
-              <div class="stop-name">Raynes Park Station</div>
-              <div class="stop-routes">152 · 163</div>
-            </div>
-          </div>
-          <button class="stop-refresh-btn" id="btn-P" onclick="refreshStop('P')" title="Refresh">↻</button>
-        </div>
-        <div id="deps-P"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
-      </div>
-      <div class="stop-card">
-        <div class="stop-header">
-          <div class="stop-name-row">
-            <div class="stop-badge">S</div>
-            <div>
-              <div class="stop-name">Approach Road</div>
-              <div class="stop-routes">163 · K5</div>
-            </div>
-          </div>
-          <button class="stop-refresh-btn" id="btn-S" onclick="refreshStop('S')" title="Refresh">↻</button>
-        </div>
-        <div id="deps-S"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
-      </div>
     </div>
-  </div>
 
-  <!-- TRAINS PANEL -->
-  <div id="panel-trains" class="panel">
-    <div id="train-alert" class="alert-banner">
-      <span class="alert-icon">⚠️</span>
-      <div class="alert-text" id="train-alert-text"></div>
-    </div>
-    <div class="section-label">Raynes Park Station — SW Railway</div>
+    <div class="section-label" style="margin-top:6px">Beverley Way</div>
     <div class="stop-grid two-col">
       <div class="stop-card">
         <div class="stop-header">
           <div class="stop-name-row">
-            <div class="stop-badge train">1</div>
-            <div><div class="stop-name">Platform 1</div><div class="stop-routes">towards London Waterloo</div></div>
+            <div class="stop-badge">J</div>
+            <div>
+              <div class="stop-name">Beverley Way/Goal Sports Centre</div>
+              <div class="stop-sub">Beverley Way – northbound</div>
+              <div class="stop-routes">265</div>
+            </div>
           </div>
-          <button class="stop-refresh-btn" onclick="refreshTrains()" title="Refresh">↻</button>
+          <button class="stop-refresh-btn" id="btn-J" onclick="refreshStop('J')" title="Refresh">↻</button>
         </div>
-        <div id="deps-T1"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
+        <div id="deps-J"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
       </div>
       <div class="stop-card">
         <div class="stop-header">
           <div class="stop-name-row">
-            <div class="stop-badge train">2</div>
-            <div><div class="stop-name">Platform 2</div><div class="stop-routes">towards London Waterloo</div></div>
+            <div class="stop-badge">U</div>
+            <div>
+              <div class="stop-name">Raynes Park High School</div>
+              <div class="stop-sub">Beverley Way – southbound</div>
+              <div class="stop-routes">152 · 265 · 655 · K5</div>
+            </div>
           </div>
-          <button class="stop-refresh-btn" onclick="refreshTrains()" title="Refresh">↻</button>
+          <button class="stop-refresh-btn" id="btn-U2" onclick="refreshStop('U2')" title="Refresh">↻</button>
         </div>
-        <div id="deps-T2"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
-      </div>
-      <div class="stop-card">
-        <div class="stop-header">
-          <div class="stop-name-row">
-            <div class="stop-badge train">3</div>
-            <div><div class="stop-name">Platform 3</div><div class="stop-routes">Hampton Court · Shepperton · Waterloo via Kingston</div></div>
-          </div>
-          <button class="stop-refresh-btn" onclick="refreshTrains()" title="Refresh">↻</button>
-        </div>
-        <div id="deps-T3"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
-      </div>
-      <div class="stop-card">
-        <div class="stop-header">
-          <div class="stop-name-row">
-            <div class="stop-badge train">4</div>
-            <div><div class="stop-name">Platform 4</div><div class="stop-routes">Chessington South · Dorking · Guildford</div></div>
-          </div>
-          <button class="stop-refresh-btn" onclick="refreshTrains()" title="Refresh">↻</button>
-        </div>
-        <div id="deps-T4"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
+        <div id="deps-U2"><div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div></div>
       </div>
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════ RAIL & TUBE PANEL ══ -->
+  <div id="panel-rail" class="panel">
+
+    <!-- Station selector tabs -->
+    <div class="station-tabs-wrap">
+      <div class="station-tabs" id="stationTabs"></div>
+    </div>
+
+    <!-- Alert banner -->
+    <div id="rail-alert" class="alert-banner">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-text" id="rail-alert-text"></div>
+    </div>
+
+    <!-- Station panels injected here -->
+    <div id="stationPanels"></div>
+  </div>
+
   <footer>
-    Data: TfL Open Data · TransportAPI · Auto-refreshes every 30s
+    Data: TfL Open Data · National Rail OpenLDBWS · Auto-refreshes every 30s
   </footer>
 </div>
 
 <script>
-const TFL_KEY      = '7e85541acd324cc18092bdd0c134ac97';
-const TAPI_APP_ID  = '5e32e732';
-const TAPI_APP_KEY = 'dea9e5982136217f2ee8cc6e28f6068f';
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+const TFL_KEY = '7e85541acd324cc18092bdd0c134ac97';
 
+// Stations to call at Raynes Park or Wimbledon Chase
+const HIGHLIGHT_STATIONS = ['Raynes Park', 'Wimbledon Chase'];
+
+// Bus stops
 const BUS_STOPS = {
-  M: { naptan: '490004647E', name: 'Bushey Rd / Grand Drive' },
-  U: { naptan: '490004647W', name: 'Bushey Rd / Grand Drive' },
-  H: { naptan: '490001237A', name: 'Coombe Lane Westbound'   },
-  B: { naptan: '490001237C', name: 'Coombe Lane Eastbound'   },
-  P: { naptan: '490001237F', name: 'Raynes Park Station'     },
-  S: { naptan: '490001237G', name: 'Approach Road'           },
+  M:  { naptan: '490004647E',  name: 'Bushey Road/Grand Drive',        sub: 'Bushey Road – eastbound',     routes: '152 · 655 · K5' },
+  U1: { naptan: '490004647W',  name: 'Bushey Road/Grand Drive',        sub: 'Bushey Road – westbound',     routes: '152 · 655 · K5' },
+  S:  { naptan: '490001237G',  name: 'Raynes Park Station',            sub: 'Approach Road – westbound',   routes: '152 · 163 · K5' },
+  P:  { naptan: '490001237F',  name: 'Raynes Park Station',            sub: 'Approach Road – eastbound',   routes: '152 · 163 · K5' },
+  H:  { naptan: '490001237A',  name: 'Raynes Park Station',            sub: 'Coombe Lane – westbound',     routes: '57 · 131 · 200 · N87' },
+  B:  { naptan: '490001237C',  name: 'Raynes Park Station',            sub: 'Coombe Lane – eastbound',     routes: '57 · 131 · 200 · N87' },
+  J:  { naptan: '490003963N',  name: 'Beverley Way/Goal Sports Centre',sub: 'Beverley Way – northbound',   routes: '265' },
+  U2: { naptan: '490011455S',  name: 'Raynes Park High School',        sub: 'Beverley Way – southbound',   routes: '152 · 265 · 655 · K5' },
 };
 
-// ── CLOCK ─────────────────────────────────────────────────────────────────────
-function updateClock() {
-  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,5);
-}
-setInterval(updateClock, 1000);
-updateClock();
+// Rail & Tube stations
+// type: 'nr' = National Rail only, 'nr+tube' = both, tubeLines = TfL line IDs
+const STATIONS = [
+  { crs: 'RAY', name: 'Raynes Park',       type: 'nr',      highlight: false,
+    platforms: { 1: 'London Waterloo', 2: 'London Waterloo', 3: 'Hampton Court · Shepperton · Waterloo via Kingston', 4: 'Chessington South · Dorking · Guildford' } },
+  { crs: 'WBO', name: 'Wimbledon Chase',   type: 'nr',      highlight: false },
+  { crs: 'WAT', name: 'London Waterloo',   type: 'nr+tube', highlight: true,
+    tubeLines: ['jubilee','bakerloo','northern','waterloo-city'],
+    tubeStopId: '910GWATRLMN' },
+  { crs: 'VXH', name: 'Vauxhall',          type: 'nr',      highlight: true },
+  { crs: 'CLJ', name: 'Clapham Junction',  type: 'nr',      highlight: true },
+  { crs: 'WIM', name: 'Wimbledon',         type: 'nr+tube', tubeLines: ['district'],
+    tubeStopId: '940GZZLUWIM' },
+  { crs: 'KNG', name: 'Kingston',          type: 'nr',      highlight: false },
+  { crs: 'NEM', name: 'New Malden',        type: 'nr',      highlight: true },
+  { crs: 'WAE', name: 'Waterloo East',     type: 'nr',      highlight: true },
+  { crs: 'BFR', name: 'Blackfriars',       type: 'nr',      highlight: true },
+];
 
-// ── TABS ──────────────────────────────────────────────────────────────────────
-function showPanel(name, el) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  el.classList.add('active');
-}
+// Which stations should show "To Raynes Park" filter
+const FILTER_STATIONS = ['WAT','WAE','VXH','CLJ','NEM','WIM','KNG','BFR'];
+
+// Track loaded stations and filter state
+const loadedStations = new Set();
+const filterActive   = {};
+let currentStation   = null;
+
+// ── CLOCK ─────────────────────────────────────────────────────────────────────
+function updateClock() { document.getElementById('clock').textContent = new Date().toTimeString().slice(0,5); }
+setInterval(updateClock, 1000); updateClock();
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function minsLabel(mins) {
@@ -394,44 +384,61 @@ function minsLabel(mins) {
   if (mins <= 8) return { text: mins + ' min', cls: 'soon' };
   return               { text: mins + ' min', cls: 'normal' };
 }
-
 function minsFromNow(str) {
   if (!str) return null;
-  const now = new Date();
-  let t;
-  if (str.includes('T')) {
-    t = new Date(str);
-  } else {
-    const [h,m] = str.split(':').map(Number);
-    t = new Date(); t.setHours(h,m,0,0);
-    if (t < now) t.setDate(t.getDate()+1);
-  }
+  const now = new Date(); let t;
+  if (str.includes('T')) { t = new Date(str); }
+  else { const [h,m] = str.split(':').map(Number); t = new Date(); t.setHours(h,m,0,0); if (t < now) t.setDate(t.getDate()+1); }
   return Math.round((t - now) / 60000);
 }
-
 function fmtTime(str) {
   if (!str) return '--:--';
   if (str.includes('T')) return str.slice(11,16);
   return str.slice(0,5);
 }
-
 function setUpdated() {
-  document.getElementById('last-updated').innerHTML =
-    '<span class="status-dot"></span>Updated ' + new Date().toTimeString().slice(0,5);
+  document.getElementById('last-updated').innerHTML = '<span class="status-dot"></span>Updated ' + new Date().toTimeString().slice(0,5);
+}
+function isHighlightDest(dest) {
+  if (!dest) return false;
+  return HIGHLIGHT_STATIONS.some(h => dest.toLowerCase().includes(h.toLowerCase()));
+}
+function loadingHTML() {
+  return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>';
+}
+function errorHTML(msg) {
+  return `<div class="state-row" style="color:var(--accent-red)">⚠ ${msg}</div>`;
 }
 
-function renderDeps(id, rows, isTrain) {
-  const el = document.getElementById(id);
-  if (!rows || !rows.length) {
-    el.innerHTML = '<div class="state-row">No upcoming departures</div>';
+// ── TOP PANEL TABS ─────────────────────────────────────────────────────────────
+function showTopPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.top-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'rail' && !currentStation) selectStation(STATIONS[0].crs);
+}
+
+// ── RENDER DEPARTURES ──────────────────────────────────────────────────────────
+function renderDeps(elId, rows, type, crs) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const showFilter = filterActive[crs];
+  const filtered = showFilter ? rows.filter(r => isHighlightDest(r.dest)) : rows;
+  if (!filtered.length) {
+    el.innerHTML = showFilter
+      ? '<div class="state-row">No services to Raynes Park / Wimbledon Chase in next 60 min</div>'
+      : '<div class="state-row">No upcoming departures</div>';
     return;
   }
-  el.innerHTML = rows.map(r => {
+  const pillClass = type === 'bus' ? '' : type === 'tube' ? ' tube' : ' train';
+  el.innerHTML = filtered.map(r => {
     const l = minsLabel(r.mins);
-    return `<div class="departure-row">
-      <div><span class="route-pill${isTrain?' train':''}">${r.route}</span></div>
-      <div>
-        <div class="destination">${r.dest}</div>
+    const hi = (type !== 'bus') && isHighlightDest(r.dest);
+    return `<div class="departure-row${hi ? ' highlight' : ''}">
+      <div><span class="route-pill${pillClass}">${r.route}</span></div>
+      <div class="dest-wrap">
+        <div class="destination">${r.dest}${hi ? '<span class="dest-highlight-badge">★</span>' : ''}</div>
         ${r.note ? `<div class="dep-note">${r.note}</div>` : ''}
       </div>
       <div class="dep-time">${r.time}</div>
@@ -440,135 +447,292 @@ function renderDeps(id, rows, isTrain) {
   }).join('');
 }
 
-function renderLoading(id) {
-  document.getElementById(id).innerHTML =
-    '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>';
-}
+function renderLoading(id) { const el=document.getElementById(id); if(el) el.innerHTML=loadingHTML(); }
+function renderError(id,msg) { const el=document.getElementById(id); if(el) el.innerHTML=errorHTML(msg); }
 
-function renderErr(id, msg) {
-  document.getElementById(id).innerHTML =
-    `<div class="state-row" style="color:var(--accent-red)">${msg}</div>`;
-}
-
-// ── BUS FETCH ─────────────────────────────────────────────────────────────────
-async function fetchBusStop(letter) {
-  const naptan = BUS_STOPS[letter].naptan;
+// ── BUS FETCH ──────────────────────────────────────────────────────────────────
+async function fetchBusStop(key) {
+  const stop = BUS_STOPS[key];
   try {
-    const res = await fetch(
-      `https://api.tfl.gov.uk/StopPoint/${naptan}/Arrivals?app_key=${TFL_KEY}`
-    );
+    const res = await fetch(`https://api.tfl.gov.uk/StopPoint/${stop.naptan}/Arrivals?app_key=${TFL_KEY}`);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const rows = data
-      .sort((a,b) => a.timeToStation - b.timeToStation)
-      .slice(0,5)
-      .map(d => ({
-        route: d.lineName,
-        dest:  d.destinationName || d.towards || '—',
-        mins:  Math.round(d.timeToStation / 60),
-        time:  fmtTime(d.expectedArrival),
-        note:  null,
-      }));
-    renderDeps('deps-' + letter, rows, false);
-  } catch(e) {
-    renderErr('deps-' + letter, '⚠ Could not load');
-    console.error(letter, e);
-  }
+    const rows = data.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,5).map(d=>({
+      route: d.lineName, dest: d.destinationName||d.towards||'—',
+      mins: Math.round(d.timeToStation/60), time: fmtTime(d.expectedArrival), note: null,
+    }));
+    renderDeps('deps-'+key, rows, 'bus', null);
+  } catch(e) { renderError('deps-'+key, 'Could not load'); }
 }
 
 async function fetchAllBuses() {
-  await Promise.all(Object.keys(BUS_STOPS).map(l => fetchBusStop(l)));
+  await Promise.all(Object.keys(BUS_STOPS).map(k => fetchBusStop(k)));
   setUpdated();
 }
 
-async function refreshStop(letter) {
-  const btn = document.getElementById('btn-' + letter);
-  btn && btn.classList.add('spinning');
-  renderLoading('deps-' + letter);
-  await fetchBusStop(letter);
-  btn && btn.classList.remove('spinning');
+async function refreshStop(key) {
+  const btn = document.getElementById('btn-'+key);
+  if (btn) btn.classList.add('spinning');
+  renderLoading('deps-'+key);
+  await fetchBusStop(key);
+  if (btn) btn.classList.remove('spinning');
 }
 
-// ── TRAIN FETCH (via Vercel serverless proxy) ─────────────────────────────────
-async function fetchTrains() {
-  try {
-    const res = await fetch('/api/trains?crs=RAY&rows=20', {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+// ── STATION TABS BUILDER ───────────────────────────────────────────────────────
+function buildStationTabs() {
+  const wrap = document.getElementById('stationTabs');
+  const panels = document.getElementById('stationPanels');
+  wrap.innerHTML = '';
+  panels.innerHTML = '';
 
-    const byP = {1:[],2:[],3:[],4:[]};
-    let affected = 0;
+  STATIONS.forEach((st, i) => {
+    // Tab button
+    const btn = document.createElement('button');
+    btn.className = 'station-tab' + (i===0?' active':'');
+    btn.textContent = st.name;
+    btn.dataset.crs = st.crs;
+    btn.onclick = () => selectStation(st.crs);
+    wrap.appendChild(btn);
 
-    (data.services || []).forEach(svc => {
-      const p = parseInt(svc.platform);
-      if (!p || p < 1 || p > 4) return;
+    // Panel
+    const panel = document.createElement('div');
+    panel.className = 'station-panel' + (i===0?' active':'');
+    panel.id = 'spanel-' + st.crs;
 
-      const { std, etd, destination } = svc;
-      const isCancelled = etd === 'Cancelled';
-      const isDelayed   = etd && etd !== 'On time' && etd !== 'Cancelled' && etd !== std;
-
-      if (isCancelled) { affected++; return; }
-      if (isDelayed) affected++;
-
-      const displayTime = (etd && /^\d{2}:\d{2}$/.test(etd)) ? etd : (std || '--:--');
-      const mins = minsFromNow(displayTime);
-      if (mins === null || mins < -2) return;
-
-      byP[p].push({
-        route: 'SWR',
-        dest:  destination || '—',
-        mins,
-        time:  displayTime,
-        note:  isDelayed ? `⚠ was ${std}` : null,
-      });
-    });
-
-    for (let p = 1; p <= 4; p++) {
-      renderDeps('deps-T' + p, byP[p].sort((a,b) => a.mins - b.mins).slice(0,4), true);
+    // Filter bar (only for relevant stations)
+    let filterBar = '';
+    if (FILTER_STATIONS.includes(st.crs)) {
+      filterBar = `<div class="filter-bar">
+        <button class="filter-btn" id="filter-${st.crs}" onclick="toggleFilter('${st.crs}')">
+          <span class="filter-dot"></span> To Raynes Park / Wimbledon Chase
+        </button>
+      </div>`;
     }
 
-    const alertEl  = document.getElementById('train-alert');
-    const alertTxt = document.getElementById('train-alert-text');
-    const msgs = data.messages || [];
-    if (affected > 0 || msgs.length > 0) {
-      alertTxt.textContent = msgs.length
-        ? msgs[0]
-        : `${affected} service(s) affected — check National Rail for details.`;
-      alertEl.classList.add('visible');
-    } else {
-      alertEl.classList.remove('visible');
-    }
+    panel.innerHTML = filterBar + `<div id="platforms-${st.crs}">${loadingHTML()}</div>`;
+    panels.appendChild(panel);
+  });
+}
 
-    setUpdated();
-
-  } catch(e) {
-    console.error('Train fetch failed:', e.message);
-    for (let p = 1; p <= 4; p++) {
-      document.getElementById('deps-T' + p).innerHTML =
-        `<div class="state-row">
-          Live data unavailable —
-          <a href="https://www.nationalrail.co.uk/stations/RAY" target="_blank"
-             style="color:var(--accent-blue);text-decoration:none">
-            Check National Rail ↗
-          </a>
-        </div>`;
-    }
+function selectStation(crs) {
+  currentStation = crs;
+  document.querySelectorAll('.station-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.crs === crs);
+  });
+  document.querySelectorAll('.station-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'spanel-'+crs);
+  });
+  if (!loadedStations.has(crs)) {
+    loadedStations.add(crs);
+    fetchStation(crs);
   }
 }
 
-async function refreshTrains() {
-  for (let p=1;p<=4;p++) renderLoading('deps-T'+p);
-  await fetchTrains();
+function toggleFilter(crs) {
+  filterActive[crs] = !filterActive[crs];
+  const btn = document.getElementById('filter-'+crs);
+  if (btn) btn.classList.toggle('active', filterActive[crs]);
+  // Re-render with cached data if available
+  if (stationCache[crs]) renderStationData(crs, stationCache[crs]);
 }
 
-// ── AUTO REFRESH + INIT ───────────────────────────────────────────────────────
+// ── STATION DATA CACHE ─────────────────────────────────────────────────────────
+const stationCache = {};
+
+// ── FETCH STATION ──────────────────────────────────────────────────────────────
+async function fetchStation(crs) {
+  const st = STATIONS.find(s => s.crs === crs);
+  if (!st) return;
+  document.getElementById('platforms-'+crs).innerHTML = loadingHTML();
+  try {
+    const [nrData, tubeData] = await Promise.all([
+      fetchNR(crs),
+      st.type === 'nr+tube' ? fetchTube(st) : Promise.resolve(null),
+    ]);
+    stationCache[crs] = { nrData, tubeData };
+    renderStationData(crs, stationCache[crs]);
+    setUpdated();
+  } catch(e) {
+    document.getElementById('platforms-'+crs).innerHTML = errorHTML('Could not load station data');
+  }
+}
+
+async function fetchNR(crs) {
+  const res = await fetch(`/api/trains?crs=${crs}&rows=50`, { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+async function fetchTube(st) {
+  // Fetch arrivals for each tube line at this station from TfL
+  const results = {};
+  for (const line of (st.tubeLines || [])) {
+    try {
+      const res = await fetch(`https://api.tfl.gov.uk/Line/${line}/Arrivals/${st.tubeStopId}?app_key=${TFL_KEY}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      results[line] = data;
+    } catch(e) { results[line] = []; }
+  }
+  return results;
+}
+
+// ── RENDER STATION DATA ────────────────────────────────────────────────────────
+function renderStationData(crs, { nrData, tubeData }) {
+  const st = STATIONS.find(s => s.crs === crs);
+  const container = document.getElementById('platforms-'+crs);
+  if (!container) return;
+
+  // NR: group by platform, filter to next 60 mins
+  const byPlatform = {};
+  let affectedCount = 0;
+  const nrMessages = nrData.messages || [];
+
+  (nrData.services || []).forEach(svc => {
+    const plat = svc.platform || 'Unknown';
+    const etd = svc.etd; const std = svc.std;
+    const isCancelled = etd === 'Cancelled';
+    const isDelayed   = etd && etd !== 'On time' && etd !== 'Cancelled' && etd !== std;
+    if (isCancelled) { affectedCount++; return; }
+    if (isDelayed) affectedCount++;
+    const displayTime = (etd && /^\d{2}:\d{2}$/.test(etd)) ? etd : (std||'--:--');
+    const mins = minsFromNow(displayTime);
+    if (mins === null || mins < -2 || mins > 60) return;
+    if (!byPlatform[plat]) byPlatform[plat] = [];
+    byPlatform[plat].push({
+      route: 'SWR', dest: svc.destination||'—', mins, time: displayTime,
+      note: isDelayed ? `⚠ was ${std}` : null,
+    });
+  });
+
+  // Sort platforms numerically
+  const platKeys = Object.keys(byPlatform).sort((a,b) => {
+    const na = parseInt(a)||999, nb = parseInt(b)||999; return na-nb;
+  });
+
+  // Alerts
+  const alertEl  = document.getElementById('rail-alert');
+  const alertTxt = document.getElementById('rail-alert-text');
+  if (affectedCount > 0 || nrMessages.length > 0) {
+    alertTxt.textContent = nrMessages.length ? nrMessages[0] : `${affectedCount} service(s) affected`;
+    alertEl.classList.add('visible');
+  } else { alertEl.classList.remove('visible'); }
+
+  let html = '';
+
+  // NR platforms
+  if (platKeys.length === 0 && !tubeData) {
+    html = '<div class="state-row">No departures in the next 60 minutes</div>';
+  } else {
+    platKeys.forEach(plat => {
+      const rows = byPlatform[plat].sort((a,b)=>a.mins-b.mins);
+      const platLabel = st.platforms?.[parseInt(plat)] || '';
+      html += `<div class="stop-card">
+        <div class="stop-header">
+          <div class="stop-name-row">
+            <div class="stop-badge train">${plat}</div>
+            <div>
+              <div class="stop-name">Platform ${plat}</div>
+              ${platLabel ? `<div class="stop-sub">${platLabel}</div>` : ''}
+            </div>
+          </div>
+        </div>
+        <div id="nr-plat-${crs}-${plat}"></div>
+      </div>`;
+    });
+
+    // Tube platforms
+    if (tubeData) {
+      const LINE_NAMES = { 'district':'District', 'jubilee':'Jubilee', 'bakerloo':'Bakerloo', 'northern':'Northern', 'waterloo-city':'Waterloo & City' };
+      const LINE_COLORS= { 'district':'#007D32','jubilee':'#868F98','bakerloo':'#894E24','northern':'#000000','waterloo-city':'#6BCDB2' };
+
+      Object.entries(tubeData).forEach(([line, arrivals]) => {
+        if (!arrivals || !arrivals.length) return;
+        // Group by platformName
+        const tubePlatforms = {};
+        arrivals.forEach(a => {
+          const p = a.platformName || line;
+          if (!tubePlatforms[p]) tubePlatforms[p] = [];
+          const mins = Math.round(a.timeToStation/60);
+          if (mins > 60) return;
+          tubePlatforms[p].push({
+            route: LINE_NAMES[line]||line,
+            dest:  a.destinationName||a.towards||'—',
+            mins,
+            time:  fmtTime(a.expectedArrival),
+            note:  null,
+          });
+        });
+        Object.entries(tubePlatforms).forEach(([platName, rows]) => {
+          const sorted = rows.sort((a,b)=>a.mins-b.mins).slice(0,6);
+          const safeId = (crs+'-tube-'+platName).replace(/[^a-z0-9]/gi,'_');
+          html += `<div class="stop-card">
+            <div class="stop-header">
+              <div class="stop-name-row">
+                <div class="stop-badge tube">🚇</div>
+                <div>
+                  <div class="stop-name">${LINE_NAMES[line]||line} line</div>
+                  <div class="stop-sub">${platName}</div>
+                </div>
+              </div>
+            </div>
+            <div id="tube-${safeId}">${renderDepRows(sorted,'tube',crs)}</div>
+          </div>`;
+        });
+      });
+    }
+  }
+
+  container.innerHTML = html;
+
+  // Now fill in NR platform divs
+  platKeys.forEach(plat => {
+    const rows = byPlatform[plat].sort((a,b)=>a.mins-b.mins);
+    const el = document.getElementById(`nr-plat-${crs}-${plat}`);
+    if (el) el.innerHTML = renderDepRows(rows, 'train', crs);
+  });
+}
+
+function renderDepRows(rows, type, crs) {
+  const showFilter = filterActive[crs];
+  const filtered = showFilter ? rows.filter(r => isHighlightDest(r.dest)) : rows;
+  if (!filtered.length) {
+    return showFilter
+      ? '<div class="state-row">No services to Raynes Park / Wimbledon Chase</div>'
+      : '<div class="state-row">No upcoming departures</div>';
+  }
+  const pillClass = type === 'tube' ? ' tube' : type === 'train' ? ' train' : '';
+  return filtered.map(r => {
+    const l = minsLabel(r.mins);
+    const hi = type !== 'bus' && isHighlightDest(r.dest);
+    return `<div class="departure-row${hi?' highlight':''}">
+      <div><span class="route-pill${pillClass}">${r.route}</span></div>
+      <div class="dest-wrap">
+        <div class="destination">${r.dest}${hi?'<span class="dest-highlight-badge">★</span>':''}</div>
+        ${r.note?`<div class="dep-note">${r.note}</div>`:''}
+      </div>
+      <div class="dep-time">${r.time}</div>
+      <div class="dep-mins ${l.cls}">${l.text}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── REFRESH STATION ────────────────────────────────────────────────────────────
+async function refreshStation(crs) {
+  loadedStations.delete(crs);
+  await fetchStation(crs);
+  loadedStations.add(crs);
+}
+
+// ── AUTO REFRESH ───────────────────────────────────────────────────────────────
 setInterval(fetchAllBuses, 30000);
-setInterval(fetchTrains,   30000);
+setInterval(() => { if (currentStation) refreshStation(currentStation); }, 30000);
+
+// ── INIT ───────────────────────────────────────────────────────────────────────
+buildStationTabs();
 fetchAllBuses();
-fetchTrains();
 </script>
 </body>
 </html>
