@@ -582,7 +582,7 @@ function parseTrainXml(xmlText) {
 }
 
 async function fetchTrains() {
-  const soapBody = buildSoapRequest(20, 'RYP');
+  const soapBody = buildSoapRequest(20, 'RAY');
 
   // Try direct first, then CORS proxy
   const attempts = [
@@ -636,7 +636,7 @@ async function fetchTrains() {
     document.getElementById('deps-T' + p).innerHTML =
       `<div class="state-row">
         Live data unavailable —
-        <a href="https://www.nationalrail.co.uk/stations/RYP" target="_blank"
+        <a href="https://www.nationalrail.co.uk/stations/RAY" target="_blank"
            style="color:var(--accent-blue);text-decoration:none">
           Check National Rail ↗
         </a>
