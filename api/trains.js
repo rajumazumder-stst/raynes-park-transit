@@ -1,10 +1,10 @@
 const LDBWS_TOKEN = '96a52d00-d2b0-4f46-8748-6ee6ab4bcf9b';
-const LDBWS_URL   = 'https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb6.asmx';
+const LDBWS_URL   = 'https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb9.asmx';
 
 function buildSoap(token, crs, numRows) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-               xmlns:ldb="http://thalesgroup.com/RTTI/2017-02-02/ldb/"
+               xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/"
                xmlns:ct="http://thalesgroup.com/RTTI/2010-11-01/ldb/commontypes">
   <soap:Header>
     <ct:AccessToken>
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
       method:  'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': '"http://thalesgroup.com/RTTI/2017-02-02/ldb/GetDepBoardWithDetails"',
+        'SOAPAction': '"http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepBoardWithDetails"',
       },
       body: buildSoap(LDBWS_TOKEN, crs, numRows),
     });
