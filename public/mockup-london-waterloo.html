@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mockup — London Waterloo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg-deep:#060c18; --bg-card:#0e1828; --bg-card2:#132035; --border:#1e3050;
+      --accent-blue:#2a7fff; --accent-teal:#00c9a7; --accent-amber:#ffb340;
+      --accent-red:#ff4d6a; --accent-green:#00e676;
+      --highlight-bg:rgba(0,230,118,0.08); --highlight-border:rgba(0,230,118,0.3);
+      --text-primary:#e8f0fc; --text-dim:#6a85aa; --text-mid:#9ab0cc;
+      --font-mono:'Space Mono',monospace; --font-body:'DM Sans',sans-serif;
+      --district-green:#007D32;
+      --jubilee:#868F98; --bakerloo:#894E24; --northern:#333; --wc:#6BCDB2;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg-deep);color:var(--text-primary);font-family:var(--font-body);padding:24px 16px 60px;max-width:700px;margin:0 auto}
+    body::before{content:'';position:fixed;inset:0;z-index:0;
+      background-image:linear-gradient(rgba(42,127,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(42,127,255,0.04) 1px,transparent 1px);
+      background-size:40px 40px;pointer-events:none}
+    .wrap{position:relative;z-index:1}
+
+    .page-title{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent-teal);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px}
+    .page-sub{font-size:12px;color:var(--text-dim);margin-bottom:28px;line-height:1.6}
+
+    .station-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+    .station-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent-amber),#ff8c42);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .station-name{font-family:var(--font-mono);font-size:16px;font-weight:700;letter-spacing:0.04em}
+    .station-crs{font-size:11px;color:var(--text-dim);margin-top:3px;letter-spacing:0.08em;text-transform:uppercase}
+
+    /* FILTER BAR */
+    .filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .filter-btn{padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:16px;color:var(--text-dim);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:5px}
+    .filter-btn.active{background:var(--highlight-bg);border-color:var(--highlight-border);color:var(--accent-green)}
+    .filter-dot{width:7px;height:7px;border-radius:50%;background:var(--accent-green);flex-shrink:0}
+
+    .section-label{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;padding-left:2px}
+
+    .stop-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+    .stop-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg-card2);border-bottom:1px solid var(--border)}
+    .stop-name-row{display:flex;align-items:center;gap:10px}
+    .stop-name{font-size:13px;font-weight:600}
+    .stop-sub{font-size:11px;color:var(--text-mid);margin-top:2px}
+    .plat-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+    .plat-chip{font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text-dim);background:rgba(30,48,80,0.8);border:1px solid var(--border);border-radius:4px;padding:2px 5px}
+
+    /* tube line colour chips in header */
+    .tube-chip{font-family:var(--font-mono);font-size:9px;font-weight:700;color:#fff;border-radius:4px;padding:2px 7px}
+    .chip-jubilee{background:var(--jubilee)}
+    .chip-bakerloo{background:var(--bakerloo)}
+    .chip-northern{background:var(--northern);border:1px solid #555}
+    .chip-wc{background:var(--wc);color:#000}
+
+    .departure-row{display:grid;grid-template-columns:36px 1fr auto auto auto;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid rgba(30,48,80,0.6)}
+    .departure-row:last-child{border-bottom:none}
+    .departure-row:hover{background:rgba(42,127,255,0.04)}
+    .departure-row.highlight{background:var(--highlight-bg);border-left:2px solid var(--accent-green);padding-left:12px}
+
+    .route-pill{display:inline-flex;align-items:center;justify-content:center;border-radius:5px;font-family:var(--font-mono);font-size:11px;font-weight:700;padding:3px 5px;min-width:36px;text-align:center}
+    .pill-sw{background:rgba(255,179,64,0.12);border:1px solid rgba(255,179,64,0.3);color:var(--accent-amber)}
+    .pill-jubilee{background:rgba(134,143,152,0.2);border:1px solid rgba(134,143,152,0.4);color:var(--jubilee)}
+    .pill-bakerloo{background:rgba(137,78,36,0.2);border:1px solid rgba(137,78,36,0.4);color:#c07040}
+    .pill-northern{background:rgba(80,80,80,0.2);border:1px solid rgba(100,100,100,0.4);color:#aaa}
+    .pill-wc{background:rgba(107,205,178,0.15);border:1px solid rgba(107,205,178,0.35);color:var(--wc)}
+
+    .dest-wrap{min-width:0}
+    .destination{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .highlight-badge{display:inline-block;font-size:9px;font-weight:700;background:var(--accent-green);color:#000;border-radius:3px;padding:1px 4px;margin-left:5px;vertical-align:middle;text-transform:uppercase}
+    .dep-note{font-size:10px;color:var(--text-dim);margin-top:1px}
+
+    .dep-time{font-family:var(--font-mono);font-size:11px;color:var(--text-mid);text-align:right}
+    .dep-mins{font-family:var(--font-mono);font-size:14px;font-weight:700;text-align:right;min-width:46px}
+    .dep-mins.due{color:var(--accent-red)}
+    .dep-mins.soon{color:var(--accent-amber)}
+    .dep-mins.normal{color:var(--accent-teal)}
+    .plat-tag{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);background:rgba(30,48,80,0.8);border:1px solid var(--border);border-radius:4px;padding:2px 5px;white-space:nowrap;text-align:center}
+
+    .note-box{font-size:11px;color:var(--text-dim);background:rgba(42,127,255,0.05);border:1px solid rgba(42,127,255,0.12);border-radius:6px;padding:8px 12px;margin-bottom:14px;line-height:1.6}
+    .note-box strong{color:var(--accent-blue)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-title">Station Mockup</div>
+  <p class="page-sub">London Waterloo — NR services within 30 min, tube within 15 min. Empty platforms hidden. Platform TBA for unassigned services.</p>
+
+  <div class="station-header">
+    <div class="station-icon">🚆</div>
+    <div>
+      <div class="station-name">London Waterloo</div>
+      <div class="station-crs">CRS: WAT</div>
+    </div>
+  </div>
+
+  <!-- FILTER -->
+  <div class="filter-bar">
+    <button class="filter-btn active">
+      <span class="filter-dot"></span> To Raynes Park / Wimbledon Chase
+    </button>
+  </div>
+
+  <div class="note-box"><strong>Note:</strong> Up to 24 NR platforms — only those with departures in the next 30 min are shown, sorted numerically. Tube lines capped at 15 min. Waterloo &amp; City shown here as it has peak services; it would be hidden entirely outside peak hours or on Sundays. ★ highlights services calling at Raynes Park or Wimbledon Chase.</div>
+
+  <!-- ── NATIONAL RAIL ── -->
+  <div class="section-label">National Rail</div>
+
+  <!-- Plat 1 — Hounslow loop / Windsor -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Platform 1</div>
+          <div class="plat-chips"><span class="plat-chip">Plat 1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap"><div class="destination">Windsor &amp; Eton Riverside</div></div>
+      <div class="dep-time">09:20</div>
+      <div class="dep-mins soon">6 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap"><div class="destination">Reading</div></div>
+      <div class="dep-time">09:35</div>
+      <div class="dep-mins normal">21 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+  </div>
+
+  <!-- Plat 3 — Raynes Park highlight -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Platform 3</div>
+          <div class="plat-chips"><span class="plat-chip">Plat 3</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row highlight">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap">
+        <div class="destination">Dorking<span class="highlight-badge">★</span></div>
+        <div class="dep-note">Calls at Raynes Park 09:38</div>
+      </div>
+      <div class="dep-time">09:22</div>
+      <div class="dep-mins soon">8 min</div>
+      <div class="plat-tag">Plat 3</div>
+    </div>
+    <div class="departure-row highlight">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap">
+        <div class="destination">Guildford<span class="highlight-badge">★</span></div>
+        <div class="dep-note">Calls at Raynes Park 09:52</div>
+      </div>
+      <div class="dep-time">09:36</div>
+      <div class="dep-mins normal">22 min</div>
+      <div class="plat-tag">Plat 3</div>
+    </div>
+  </div>
+
+  <!-- Plat 7 — Shepperton via Raynes Park -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Platform 7</div>
+          <div class="plat-chips"><span class="plat-chip">Plat 7</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row highlight">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap">
+        <div class="destination">Shepperton<span class="highlight-badge">★</span></div>
+        <div class="dep-note">Calls at Raynes Park 09:31</div>
+      </div>
+      <div class="dep-time">09:17</div>
+      <div class="dep-mins soon">3 min</div>
+      <div class="plat-tag">Plat 7</div>
+    </div>
+    <div class="departure-row highlight">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap">
+        <div class="destination">Hampton Court<span class="highlight-badge">★</span></div>
+        <div class="dep-note">Calls at Raynes Park 09:44</div>
+      </div>
+      <div class="dep-time">09:30</div>
+      <div class="dep-mins normal">16 min</div>
+      <div class="plat-tag">Plat 7</div>
+    </div>
+  </div>
+
+  <!-- Plat 12 -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Platform 12</div>
+          <div class="plat-chips"><span class="plat-chip">Plat 12</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap"><div class="destination">Basingstoke</div></div>
+      <div class="dep-time">09:14</div>
+      <div class="dep-mins due">Due</div>
+      <div class="plat-tag">Plat 12</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap"><div class="destination">Southampton Central</div></div>
+      <div class="dep-time">09:29</div>
+      <div class="dep-mins normal">15 min</div>
+      <div class="plat-tag">Plat 12</div>
+    </div>
+  </div>
+
+  <!-- Platform TBA -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Platform TBA</div>
+          <div class="stop-sub">Platform not yet assigned</div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row highlight">
+      <div><span class="route-pill pill-sw">SW</span></div>
+      <div class="dest-wrap">
+        <div class="destination">Wimbledon Chase<span class="highlight-badge">★</span></div>
+        <div class="dep-note">Platform assigned closer to departure</div>
+      </div>
+      <div class="dep-time">09:40</div>
+      <div class="dep-mins normal">26 min</div>
+      <div class="plat-tag">TBA</div>
+    </div>
+  </div>
+
+  <!-- ── LONDON UNDERGROUND ── -->
+  <div class="section-label" style="margin-top:8px">London Underground</div>
+
+  <!-- Jubilee line -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Jubilee Line</div>
+          <div class="plat-chips"><span class="tube-chip chip-jubilee">Jubilee</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-jubilee">JL</span></div>
+      <div class="dest-wrap"><div class="destination">Stratford</div><div class="dep-note">Eastbound</div></div>
+      <div class="dep-time">09:15</div>
+      <div class="dep-mins soon">1 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-jubilee">JL</span></div>
+      <div class="dest-wrap"><div class="destination">Stanmore</div><div class="dep-note">Westbound</div></div>
+      <div class="dep-time">09:17</div>
+      <div class="dep-mins soon">3 min</div>
+      <div class="plat-tag">Plat 2</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-jubilee">JL</span></div>
+      <div class="dest-wrap"><div class="destination">Stratford</div><div class="dep-note">Eastbound</div></div>
+      <div class="dep-time">09:21</div>
+      <div class="dep-mins soon">7 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-jubilee">JL</span></div>
+      <div class="dest-wrap"><div class="destination">Stanmore</div><div class="dep-note">Westbound</div></div>
+      <div class="dep-time">09:26</div>
+      <div class="dep-mins normal">12 min</div>
+      <div class="plat-tag">Plat 2</div>
+    </div>
+  </div>
+
+  <!-- Bakerloo line -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Bakerloo Line</div>
+          <div class="plat-chips"><span class="tube-chip chip-bakerloo">Bakerloo</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-bakerloo">BL</span></div>
+      <div class="dest-wrap"><div class="destination">Harrow &amp; Wealdstone</div><div class="dep-note">Northbound</div></div>
+      <div class="dep-time">09:16</div>
+      <div class="dep-mins soon">2 min</div>
+      <div class="plat-tag">Plat 3</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-bakerloo">BL</span></div>
+      <div class="dest-wrap"><div class="destination">Elephant &amp; Castle</div><div class="dep-note">Southbound</div></div>
+      <div class="dep-time">09:19</div>
+      <div class="dep-mins soon">5 min</div>
+      <div class="plat-tag">Plat 4</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-bakerloo">BL</span></div>
+      <div class="dest-wrap"><div class="destination">Harrow &amp; Wealdstone</div><div class="dep-note">Northbound</div></div>
+      <div class="dep-time">09:24</div>
+      <div class="dep-mins normal">10 min</div>
+      <div class="plat-tag">Plat 3</div>
+    </div>
+  </div>
+
+  <!-- Northern line -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Northern Line</div>
+          <div class="plat-chips"><span class="tube-chip chip-northern">Northern</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-northern">NT</span></div>
+      <div class="dest-wrap"><div class="destination">Edgware</div><div class="dep-note">Northbound via Charing Cross</div></div>
+      <div class="dep-time">09:14</div>
+      <div class="dep-mins due">Due</div>
+      <div class="plat-tag">Plat 5</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-northern">NT</span></div>
+      <div class="dest-wrap"><div class="destination">Morden</div><div class="dep-note">Southbound</div></div>
+      <div class="dep-time">09:16</div>
+      <div class="dep-mins soon">2 min</div>
+      <div class="plat-tag">Plat 6</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-northern">NT</span></div>
+      <div class="dest-wrap"><div class="destination">High Barnet</div><div class="dep-note">Northbound via Bank</div></div>
+      <div class="dep-time">09:20</div>
+      <div class="dep-mins soon">6 min</div>
+      <div class="plat-tag">Plat 5</div>
+    </div>
+  </div>
+
+  <!-- Waterloo & City line (peak hours only) -->
+  <div class="stop-card">
+    <div class="stop-header">
+      <div class="stop-name-row">
+        <div>
+          <div class="stop-name">Waterloo &amp; City Line</div>
+          <div class="plat-chips"><span class="tube-chip chip-wc">W&amp;C</span></div>
+          <div class="stop-sub" style="margin-top:4px;font-size:10px;color:var(--text-dim)">Peak hours only · Hidden outside peak &amp; Sundays</div>
+        </div>
+      </div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-wc">WC</span></div>
+      <div class="dest-wrap"><div class="destination">Bank</div><div class="dep-note">Eastbound</div></div>
+      <div class="dep-time">09:15</div>
+      <div class="dep-mins soon">1 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+    <div class="departure-row">
+      <div><span class="route-pill pill-wc">WC</span></div>
+      <div class="dest-wrap"><div class="destination">Bank</div><div class="dep-note">Eastbound</div></div>
+      <div class="dep-time">09:23</div>
+      <div class="dep-mins soon">9 min</div>
+      <div class="plat-tag">Plat 1</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
