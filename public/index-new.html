@@ -33,6 +33,7 @@
     .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent-blue),var(--accent-teal));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
     .logo-text{font-family:var(--font-mono);font-size:14px;font-weight:700;letter-spacing:0.04em}
     .logo-sub{font-size:10px;color:var(--text-dim);margin-top:2px;letter-spacing:0.08em;text-transform:uppercase}
+    .logo-version{font-size:9px;color:var(--text-dim);margin-top:3px;letter-spacing:0.04em;opacity:0.7}
     #clock{font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--accent-teal);letter-spacing:0.04em}
     #last-updated{font-size:10px;color:var(--text-dim);text-align:right}
     .status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent-teal);display:inline-block;margin-right:5px;box-shadow:0 0 6px var(--accent-teal);animation:pulse-dot 2s infinite}
@@ -94,6 +95,9 @@
     .stop-refresh-btn{background:none;border:1px solid var(--border);border-radius:6px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);font-size:13px;transition:all 0.2s;flex-shrink:0}
     .stop-refresh-btn:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
     .stop-refresh-btn.spinning{animation:spin 0.6s linear infinite}
+    .station-refresh-btn{background:none;border:1px solid var(--border);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);font-size:15px;transition:all 0.2s;margin-left:auto;flex-shrink:0}
+    .station-refresh-btn:hover{border-color:var(--accent-amber);color:var(--accent-amber)}
+    .station-refresh-btn.spinning{animation:spin 0.6s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
     /* DEPARTURE ROW */
@@ -157,6 +161,7 @@
       <div>
         <div class="logo-text">RAYNES PARK</div>
         <div class="logo-sub">Live Transit Board</div>
+        <div class="logo-version" id="app-version">Version: —</div>
       </div>
     </div>
     <div>
@@ -271,8 +276,8 @@ const NEIGHBOURHOODS = [
   { id: 'kingston', name: 'Kingston', autoload: false,
     subgroups: [
       { id: 'kng-returning', name: 'Returning', defaultOpen: true, stops: [
-        { key:'KNG_A2', naptan:'490005800A2', name:'Cromwell Road Bus Station', sub:'Cromwell Road – eastbound',   routes:'57 · 71 · 85 · 111 · 131 · 216 · 286 · 406 · 411 · 418 · 458 · 465 · 481 · 513 · K1 · K5' },
         { key:'KNG_E3', naptan:'490006412E3', name:'Eden Street',               sub:'Eden Street – northbound',   routes:'65 · 71 · 371 · 406 · 418 · 458 · 513 · 671 · 714 · 715 · K1 · K5 · N65' },
+        { key:'KNG_A2', naptan:'490005800A2', name:'Cromwell Road Bus Station', sub:'Cromwell Road – eastbound',   routes:'57 · 71 · 85 · 111 · 131 · 216 · 286 · 406 · 411 · 418 · 458 · 465 · 481 · 513 · K1 · K5' },
       ]},
       { id: 'kng-outbound', name: 'Outbound', defaultOpen: false, stops: [
         { key:'KNG_R',  naptan:'490001173R',  name:'Kingston Station',          sub:'Wood Street – westbound',    routes:'111 · 216 · 411' },
@@ -316,9 +321,9 @@ const STATIONS = [
   },
   { crs:'VXH', name:'Vauxhall',         filterStation: true,
     nrGroups:[
-      { label:'London Waterloo', plats:['1','2','5','7'] },
-      { label:'Reading',         plats:['3','4'] },
       { label:'Weymouth',        plats:['6','8'] },
+      { label:'Reading',         plats:['3','4'] },
+      { label:'London Waterloo', plats:['1','2','5','7'] },
     ],
     tube:[
       { line:'victoria', stopId:'940GZZLUVXL', label:'Victoria Line', pillClass:'pill-tube-victoria' },
@@ -326,11 +331,11 @@ const STATIONS = [
   },
   { crs:'CLJ', name:'Clapham Junction', filterStation: true,
     nrGroups:[
+      { label:'Woking',           plats:['9','11'] },
       { label:'Mildmay',          plats:['1'] },
       { label:'Windrush',         plats:['2'] },
       { label:'London Waterloo',  plats:['3','4','7','8','10'] },
       { label:'Reading',          plats:['5','6'] },
-      { label:'Woking',           plats:['9','11'] },
       { label:'London Victoria',  plats:['12','14'] },
       { label:'East Croydon',     plats:['13','15','17'] },
       { label:'Watford Junction', plats:['16'] },
@@ -338,8 +343,8 @@ const STATIONS = [
   },
   { crs:'WIM', name:'Wimbledon',        filterStation: true,
     nrGroups:[
-      { label:'London Waterloo', plats:['5','6'] },
       { label:'Woking',          plats:['7','8'] },
+      { label:'London Waterloo', plats:['5','6'] },
       { label:'Thameslink',      plats:['9'] },
     ],
     tube:[
@@ -358,6 +363,9 @@ const STATIONS = [
   { crs:'SNS', name:'Staines',          filterStation: true,
     nrGroups:[
       { label:'London Waterloo', plats:['1'] },
+      { label:'Reading',         plats:['2'] },
+    ]
+  },
   { crs:'NEM', name:'New Malden',       filterStation: true,
     nrGroups:[
       { label:'London Waterloo',                                        plats:['1'] },
@@ -366,9 +374,6 @@ const STATIONS = [
   },
   { crs:'WAE', name:'Waterloo East',    filterStation: true },
   { crs:'BFR', name:'Blackfriars',      filterStation: true },
-      { label:'Reading',         plats:['2'] },
-    ]
-  },
 ];
 
 // Operator code → pill class
@@ -406,7 +411,16 @@ function minsFromNow(s){
   return Math.round((t-now)/60000);
 }
 function fmtTime(s){ if(!s) return '--:--'; if(s.includes('T')) return s.slice(11,16); return s.slice(0,5); }
-function isHighlight(dest){ if(!dest) return false; return HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase())); }
+function isHighlight(dest,callingPoints){
+  if(!dest && !callingPoints) return false;
+  // Check calling points first if available
+  if(callingPoints && callingPoints.length){
+    return callingPoints.some(cp=>HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase())));
+  }
+  // Fallback to destination name
+  if(!dest) return false;
+  return HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase()));
+}
 function loadingHTML(){ return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>'; }
 function errorHTML(msg){ return `<div class="state-row" style="color:var(--accent-red)">⚠ ${msg}</div>`; }
 function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toTimeString().slice(0,5); }
@@ -428,9 +442,9 @@ function showTopPanel(name,el){
 // ══════════════════════════════════════════════════════════════════
 function depRow(r, type, crs){
   const l = minsLabel(r.mins);
-  const hi = type!=='bus' && isHighlight(r.dest);
+  const hi = type!=='bus' && isHighlight(r.dest,r.callingPoints);
   const pillClass = type==='bus' ? 'pill-bus' : (r.pillClass || OP_PILL[r.op] || 'pill-SW');
-  const platTag = r.plat ? `<div class="plat-tag">Plat ${r.plat}</div>` : (type==='bus' ? '' : '<div class="plat-tag">TBA</div>');
+  const platTag = r.plat ? `<div class="plat-tag">Plat ${r.plat}</div>` : (type==='bus' ? '' : (type==='tube'||type==='tram' ? '' : '<div class="plat-tag">TBA</div>'));
   return `<div class="departure-row${hi?' highlight':''}">
     <div><span class="route-pill ${pillClass}">${r.route||''}</span></div>
     <div class="dest-wrap">
@@ -445,7 +459,7 @@ function depRow(r, type, crs){
 
 function renderRows(rows, type, crs){
   const showFilter = filterActive[crs];
-  const filtered = showFilter ? rows.filter(r=>isHighlight(r.dest)) : rows;
+  const filtered = showFilter ? rows.filter(r=>isHighlight(r.dest,r.callingPoints)) : rows;
   if(!filtered.length) return showFilter
     ? '<div class="state-row">No services to Raynes Park / Wimbledon Chase</div>'
     : '<div class="state-row">No upcoming departures</div>';
@@ -613,6 +627,11 @@ function buildStationTabs(){
         <button class="filter-btn" id="filter-${st.crs}" onclick="toggleFilter('${st.crs}')">
           <span class="filter-dot"></span> To Raynes Park / Wimbledon Chase
         </button>
+        <button class="station-refresh-btn" id="stn-refresh-${st.crs}" onclick="refreshStation('${st.crs}')" title="Refresh">↻</button>
+      </div>`;
+    } else {
+      filterBar=`<div class="filter-bar">
+        <button class="station-refresh-btn" id="stn-refresh-${st.crs}" onclick="refreshStation('${st.crs}')" title="Refresh">↻</button>
       </div>`;
     }
     panel.innerHTML=filterBar+`<div id="platforms-${st.crs}">${loadingHTML()}</div>`;
@@ -630,11 +649,41 @@ function selectStation(crs){
   }
 }
 
-function toggleFilter(crs){
+async function refreshStation(crs){
+  const btn=document.getElementById('stn-refresh-'+crs);
+  if(btn) btn.classList.add('spinning');
+  loadedStations.delete(crs);
+  await fetchStation(crs);
+  loadedStations.add(crs);
+  if(btn) btn.classList.remove('spinning');
+}
+
+async function toggleFilter(crs){
   filterActive[crs]=!filterActive[crs];
   const btn=document.getElementById('filter-'+crs);
   if(btn) btn.classList.toggle('active',filterActive[crs]);
-  if(stationCache[crs]) renderStationData(crs,stationCache[crs]);
+  if(!filterActive[crs]){
+    // Filter turned off — re-render with cached data
+    if(stationCache[crs]) renderStationData(crs,stationCache[crs]);
+    return;
+  }
+  // Filter turned on — fetch calling points for each service
+  if(!stationCache[crs]) return;
+  const container=document.getElementById('platforms-'+crs);
+  if(container) container.innerHTML=loadingHTML();
+  const services=(stationCache[crs].nrData&&stationCache[crs].nrData.services)||[];
+  // Fetch calling points for all services in parallel
+  await Promise.all(services.map(async svc=>{
+    if(svc.callingPoints) return; // already fetched
+    if(!svc.serviceId) return;
+    try{
+      const res=await fetch(`/api/calling-points?serviceId=${encodeURIComponent(svc.serviceId)}`,{signal:AbortSignal.timeout(8000)});
+      if(!res.ok) return;
+      const data=await res.json();
+      svc.callingPoints=data.callingPoints||[];
+    }catch(e){ svc.callingPoints=[]; }
+  }));
+  renderStationData(crs,stationCache[crs]);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -704,12 +753,14 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
     if(!byPlat[plat]) byPlat[plat]=[];
 
     // Determine operator pill
-    const atoc=(svc.operatorCode||svc.operator||svc.atocCode||'SW').toUpperCase();
-    const op=ATOC_MAP[atoc]||'SW';
+    const atoc=(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase();
+    const op=ATOC_MAP[atoc]||'';
 
     byPlat[plat].push({
       route:op, op, dest:svc.destination||'—', mins, time:displayTime,
       note:isDelayed?`⚠ was ${std}`:null, plat,
+      callingPoints:svc.callingPoints||null,
+      serviceId:svc.serviceId||null,
     });
   });
 
@@ -816,7 +867,7 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
             plat:a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null,
           }));
         const platNums=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))];
-        const chips=platNums.map(p=>`<span class="plat-chip">${p}</span>`).join('');
+        const chips=platNums.map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
         html+=`<div class="stop-card" style="margin-bottom:12px">
           <div class="stop-header"><div class="stop-name-row"><div>
             <div class="stop-name">${lineCfg.label}</div>
@@ -825,7 +876,7 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
           <div>${combinedRows.map(r=>depRow(r,'tube',crs)).join('')||'<div class="state-row">No upcoming departures</div>'}</div>
         </div>`;
       } else {
-        Object.entries(tubePlats).forEach(([platName,rows])=>{
+        Object.entries(tubePlats).sort(([a],[b])=>a.localeCompare(b)).forEach(([platName,rows])=>{
           if(!rows.length) return;
           // For W&C line hide if no services
           if(lineCfg.line==='waterloo-city'&&!rows.length) return;
@@ -894,6 +945,20 @@ setInterval(()=>{
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
+// Fetch version timestamp from Last-Modified header
+(async()=>{
+  try{
+    const res=await fetch(window.location.pathname,{method:'HEAD'});
+    const lm=res.headers.get('Last-Modified');
+    if(lm){
+      const d=new Date(lm);
+      const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const str=`${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      document.getElementById('app-version').textContent='Version: '+str;
+    }
+  }catch(e){}
+})();
+
 buildNeighbourhoodTabs();
 buildStationTabs();
 currentNeigh='raynes-park';
