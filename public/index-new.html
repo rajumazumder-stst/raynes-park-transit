@@ -207,7 +207,7 @@ const NEIGHBOURHOODS = [
     subgroups: [
       { id: 'bushey-road', name: 'Bushey Road', defaultOpen: true, stops: [
         { key:'M',  naptan:'490004647E', name:'Bushey Road/Grand Drive',         sub:'Bushey Road – eastbound',     routes:'152 · 655 · K5' },
-        { key:'U1', naptan:'490004647W', name:'Bushey Road/Grand Drive',         sub:'Bushey Road – westbound',     routes:'152 · 655 · K5' },
+        { key:'U1', naptan:'490004647W', name:'Bushey Road/Grand Drive',         sub:'Bushey Road – westbound',     routes:'152 · 655 · K5', letter:'U' },
       ]},
       { id: 'rp-station', name: 'Raynes Park Station', defaultOpen: false, stops: [
         { key:'S',  naptan:'490001237G', name:'Raynes Park Station',             sub:'Approach Road – westbound',   routes:'152 · 163 · K5' },
@@ -217,7 +217,7 @@ const NEIGHBOURHOODS = [
       ]},
       { id: 'beverley-way', name: 'Beverley Way', defaultOpen: false, stops: [
         { key:'J',  naptan:'490003963N', name:'Beverley Way/Goal Sports Centre', sub:'Beverley Way – northbound',   routes:'265' },
-        { key:'U2', naptan:'490011455S', name:'Raynes Park High School',         sub:'Beverley Way – southbound',   routes:'152 · 265 · 655 · K5' },
+        { key:'U2', naptan:'490011455S', name:'Raynes Park High School',         sub:'Beverley Way – southbound',   routes:'152 · 265 · 655 · K5', letter:'U' },
       ]},
     ]
   },
@@ -355,6 +355,9 @@ const STATIONS = [
       { label:'London Waterloo via Wimbledon',             plats:['3'] },
     ]
   },
+  { crs:'SNS', name:'Staines',          filterStation: true,
+    nrGroups:[
+      { label:'London Waterloo', plats:['1'] },
   { crs:'NEM', name:'New Malden',       filterStation: true,
     nrGroups:[
       { label:'London Waterloo',                                        plats:['1'] },
@@ -363,9 +366,6 @@ const STATIONS = [
   },
   { crs:'WAE', name:'Waterloo East',    filterStation: true },
   { crs:'BFR', name:'Blackfriars',      filterStation: true },
-  { crs:'SNS', name:'Staines',          filterStation: true,
-    nrGroups:[
-      { label:'London Waterloo', plats:['1'] },
       { label:'Reading',         plats:['2'] },
     ]
   },
