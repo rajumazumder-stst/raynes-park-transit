@@ -704,7 +704,7 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
     if(!byPlat[plat]) byPlat[plat]=[];
 
     // Determine operator pill
-    const atoc=(svc.operator||svc.atocCode||'SW').toUpperCase();
+    const atoc=(svc.operatorCode||svc.operator||svc.atocCode||'SW').toUpperCase();
     const op=ATOC_MAP[atoc]||'SW';
 
     byPlat[plat].push({
