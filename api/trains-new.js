@@ -39,10 +39,11 @@ function parseXml(xmlText) {
     }
 
     services.push({
-      platform:    get('platform'),
-      std:         get('std'),
-      etd:         get('etd'),
+      platform:     get('platform'),
+      std:          get('std'),
+      etd:          get('etd'),
       destination,
+      operatorCode: get('operatorCode'),
     });
   });
 
