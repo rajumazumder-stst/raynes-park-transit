@@ -44,6 +44,7 @@ function parseXml(xmlText) {
       etd:          get('etd'),
       destination,
       operatorCode: get('operatorCode'),
+      serviceId:    get('serviceID'),
     });
   });
 
