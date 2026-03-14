@@ -15,7 +15,7 @@ function buildSoap(token, crs, numRows) {
          <ldb:filterCrs></ldb:filterCrs>
          <ldb:filterType>to</ldb:filterType>
          <ldb:timeOffset>0</ldb:timeOffset>
-         <ldb:timeWindow>120</ldb:timeWindow>
+         <ldb:timeWindow>30</ldb:timeWindow>
       </ldb:GetDepartureBoardRequest>
    </soap:Body>
 </soap:Envelope>`;
@@ -39,10 +39,12 @@ function parseXml(xmlText) {
     }
 
     services.push({
-      platform:    get('platform'),
-      std:         get('std'),
-      etd:         get('etd'),
+      platform:     get('platform'),
+      std:          get('std'),
+      etd:          get('etd'),
       destination,
+      operatorCode: get('operatorCode'),
+      serviceId:    get('serviceID'),
     });
   });
 
