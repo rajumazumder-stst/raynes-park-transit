@@ -340,6 +340,9 @@ const STATIONS = [
     dynamicGroups: true,
     nrGroups:[
       { label:'South West Main Line',  plats:['6','8'] },
+      { label:'London Waterloo',       plats:[] },
+      { label:'Waterloo-Reading line', plats:[] },
+      { label:'Other',                 plats:[] },
     ],
     tube:[
       { line:'victoria', stopId:'940GZZLUVXL', label:'Victoria Line', pillClass:'pill-tube-victoria' },
@@ -360,8 +363,8 @@ const STATIONS = [
   },
   { crs:'WIM', name:'Wimbledon',        filterStation: true,
     nrGroups:[
-      { label:'Woking',          plats:['7','8'] },
-      { label:'London Waterloo', plats:['5','6'] },
+      { label:'South West Main Line', plats:['7','8'] },
+      { label:'London Waterloo',       plats:['5','6'] },
       { label:'Thameslink',      plats:['9'] },
     ],
     tube:[
@@ -391,14 +394,14 @@ const STATIONS = [
   },
   { crs:'WAE', name:'Waterloo East',    filterStation: true,
     nrGroups:[
-      { label:'Charing Cross',          plats:['B','D'] },
       { label:'South Eastern Main Line', plats:['A','C'] },
+      { label:'Charing Cross',           plats:['B','D'] },
     ]
   },
   { crs:'BFR', name:'Blackfriars',      filterStation: true,
     nrGroups:[
-      { label:'Northbound', plats:['2'] },
       { label:'Southbound', plats:['1','3'] },
+      { label:'Northbound', plats:['2'] },
     ],
     tube:[
       { line:'district', stopId:'940GZZLUBKF', label:'District Line', pillClass:'pill-tube-district' },
@@ -986,7 +989,7 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
         });
       });
       // For district at Wimbledon — combine all platforms into one card
-      const isCombined = lineCfg.line==='district';
+      const isCombined = lineCfg.line==='district' && crs==='WIM';
       if(isCombined){
         const allRows=Object.values(tubePlats).flat().sort((a,b)=>a.mins-b.mins);
         if(!allRows.length) return;
