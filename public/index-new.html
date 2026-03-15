@@ -17,7 +17,7 @@
       --text-primary:#e8f0fc; --text-dim:#6a85aa; --text-mid:#9ab0cc;
       --font-mono:'Space Mono',monospace; --font-body:'DM Sans',sans-serif;
       --radius:12px; --radius-sm:8px;
-      --district:#007D32; --tramlink:#5FB526; --victoria:#0098D4;
+      --district:#007D32; --tramlink:#5FB526; --victoria:#0098D4; --circle:#FFD329;
       --jubilee:#868F98; --bakerloo:#894E24; --northern:#1a1a1a; --wc:#6BCDB2;
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -69,6 +69,9 @@
     .filter-btn:hover{border-color:var(--accent-blue);color:var(--text-primary)}
     .filter-btn.active{background:var(--highlight-bg);border-color:var(--highlight-border);color:var(--accent-green)}
     .filter-dot{width:7px;height:7px;border-radius:50%;background:var(--accent-green);flex-shrink:0}
+    .seg-control{display:flex;background:var(--bg-card);border:1px solid var(--border);border-radius:20px;padding:3px;gap:2px;flex-shrink:0}
+    .seg-btn{padding:4px 10px;border-radius:14px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.05em;cursor:pointer;border:none;background:none;color:var(--text-dim);transition:all 0.2s;white-space:nowrap}
+    .seg-btn.active{background:var(--accent-amber);color:#000}
 
     /* SECTION LABEL */
     .section-label{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px;padding-left:2px}
@@ -122,6 +125,7 @@
     .pill-tube-bakerloo{background:var(--bakerloo);border:none;min-width:28px;height:20px}
     .pill-tube-northern{background:var(--northern);border:1px solid #444;min-width:28px;height:20px}
     .pill-tube-wc{background:var(--wc);border:none;min-width:28px;height:20px}
+    .pill-tube-circle{background:#FFD329;border:none;min-width:28px;height:20px}
 
     .dest-wrap{min-width:0}
     .destination{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -226,6 +230,14 @@ const NEIGHBOURHOODS = [
       ]},
     ]
   },
+  { id: 'wimbledon-chase-bus', name: 'Wimbledon Chase', autoload: false,
+    flat: true,
+    stops: [
+      { key:'WCB_MT', naptan:'490001339A', name:'Wimbledon Chase Station', sub:'Kingston Road – northeastbound', routes:'152 · 163 · 164 · 655 · K5', letter:'MT' },
+      { key:'WCB_MK', naptan:'490004645S', name:'Merton Mansions',         sub:'Martin Way – southeastbound',   routes:'164',                          letter:'MK' },
+      { key:'WCB_MH', naptan:'490001339B', name:'Wimbledon Chase Station', sub:'Kingston Road – southwestbound', routes:'152 · 163 · 164 · 655 · K5', letter:'MH' },
+    ]
+  },
   { id: 'new-malden', name: 'New Malden', autoload: false,
     subgroups: [
       { id: 'nm-returning', name: 'Returning', defaultOpen: true, stops: [
@@ -255,7 +267,8 @@ const NEIGHBOURHOODS = [
   { id: 'south-wimbledon', name: 'South Wimbledon', autoload: false,
     flat: true,
     stops: [
-      { key:'SW_SF', naptan:'490000216C',  name:'South Wimbledon Station', sub:'Merton High Street – westbound', routes:'57 · 131 · 152 · 219 · 655 · N155', letter:'SF' },
+      { key:'SW_SF',  naptan:'490000216C',  name:'South Wimbledon Station', sub:'Merton High Street – westbound',  routes:'57 · 131 · 152 · 219 · 655 · N155', letter:'SF' },
+      { key:'SW_MTP', naptan:'940GZZCRMTP', name:'Merton Park',             sub:'Southbound tram platform',        routes:'Tramlink',                           letter:'🚊', isTram:true },
     ]
   },
   { id: 'colliers-wood', name: 'Colliers Wood', autoload: false,
@@ -301,7 +314,7 @@ const STATIONS = [
   { crs:'RAY', name:'Raynes Park',      filterStation: false,
     nrGroups:[
       { label:'London Waterloo',                               plats:['1','2'] },
-      { label:'Hampton Court · Shepperton · Waterloo via Kingston', plats:['3'] },
+      { label:'Hampton Court · Shepperton · London Waterloo via Kingston', plats:['3'] },
       { label:'Chessington South · Dorking · Guildford',      plats:['4'] },
     ]
   },
@@ -312,6 +325,10 @@ const STATIONS = [
     ]
   },
   { crs:'WAT', name:'London Waterloo',  filterStation: true,
+    nrGroups:[
+      { label:'South West Main Line',  plats:['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'] },
+      { label:'Waterloo-Reading line', plats:['17','18','19','20','21','22','23','24'] },
+    ],
     tube:[
       { line:'jubilee',      stopId:'940GZZLUWLO', label:'Jubilee Line',          pillClass:'pill-tube-jubilee'  },
       { line:'bakerloo',     stopId:'940GZZLUWLO', label:'Bakerloo Line',         pillClass:'pill-tube-bakerloo' },
@@ -320,26 +337,26 @@ const STATIONS = [
     ]
   },
   { crs:'VXH', name:'Vauxhall',         filterStation: true,
+    dynamicGroups: true,
     nrGroups:[
-      { label:'Weymouth',        plats:['6','8'] },
-      { label:'Reading',         plats:['3','4'] },
-      { label:'London Waterloo', plats:['1','2','5','7'] },
+      { label:'South West Main Line',  plats:['6','8'] },
     ],
     tube:[
       { line:'victoria', stopId:'940GZZLUVXL', label:'Victoria Line', pillClass:'pill-tube-victoria' },
     ]
   },
   { crs:'CLJ', name:'Clapham Junction', filterStation: true,
+    dynamicGroups: true,
     nrGroups:[
-      { label:'Woking',           plats:['9','11'] },
-      { label:'Mildmay',          plats:['1'] },
-      { label:'Windrush',         plats:['2'] },
-      { label:'London Waterloo',  plats:['3','4','7','8','10'] },
-      { label:'Reading',          plats:['5','6'] },
-      { label:'London Victoria',  plats:['12','14'] },
-      { label:'East Croydon',     plats:['13','15','17'] },
-      { label:'Watford Junction', plats:['16'] },
-    ]
+      { label:'South West Main Line',  plats:['9','11'] },
+      { label:'London Overground',     plats:['1','2'] },
+      { label:'London Waterloo',       plats:['3','4','7','8','10'] },
+      { label:'Waterloo-Reading line', plats:['5','6'] },
+      { label:'London Victoria',       plats:['12','14'] },
+      { label:'Brighton Main Line',    plats:['13','15'] },
+      { label:'West London Line',      plats:['16'] },
+    ],
+    dynamicPlatforms: { '17': { 'SN':'Brighton Main Line', 'LO':'London Overground' } }
   },
   { crs:'WIM', name:'Wimbledon',        filterStation: true,
     nrGroups:[
@@ -372,8 +389,22 @@ const STATIONS = [
       { label:'Shepperton · Hampton Court · London Waterloo via Kingston', plats:['4'] },
     ]
   },
-  { crs:'WAE', name:'Waterloo East',    filterStation: true },
-  { crs:'BFR', name:'Blackfriars',      filterStation: true },
+  { crs:'WAE', name:'Waterloo East',    filterStation: true,
+    nrGroups:[
+      { label:'Charing Cross',          plats:['B','D'] },
+      { label:'South Eastern Main Line', plats:['A','C'] },
+    ]
+  },
+  { crs:'BFR', name:'Blackfriars',      filterStation: true,
+    nrGroups:[
+      { label:'Northbound', plats:['2'] },
+      { label:'Southbound', plats:['1','3'] },
+    ],
+    tube:[
+      { line:'district', stopId:'940GZZLUBKF', label:'District Line', pillClass:'pill-tube-district' },
+      { line:'circle',   stopId:'940GZZLUBKF', label:'Circle Line',   pillClass:'pill-tube-circle'   },
+    ]
+  },
 ];
 
 // Operator code → pill class
@@ -390,6 +421,7 @@ const stationCache    = {};
 const loadedStations  = new Set();
 const loadedNeigh     = new Set();
 const filterActive    = {};
+const viewMode        = {}; // 'grouped' (default) or 'platform'
 let   currentNeigh    = null;
 let   currentStation  = null;
 
@@ -570,16 +602,26 @@ async function fetchBusStop(key){
   const el=document.getElementById('deps-'+key);
   if(el) el.innerHTML=loadingHTML();
   try{
-    const res=await fetch(`https://api.tfl.gov.uk/StopPoint/${stop.naptan}/Arrivals?app_key=${TFL_KEY}`);
+    // Tram stops use the Line arrivals endpoint
+    const url = stop.isTram
+      ? `https://api.tfl.gov.uk/Line/tram/Arrivals/${stop.naptan}?app_key=${TFL_KEY}`
+      : `https://api.tfl.gov.uk/StopPoint/${stop.naptan}/Arrivals?app_key=${TFL_KEY}`;
+    const res=await fetch(url);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
     if(!Array.isArray(data)) throw new Error('Invalid response');
-    const rows=data.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6).map(d=>({
-      route: d.lineName, dest: d.destinationName||d.towards||'—',
-      mins: Math.round(d.timeToStation/60), time: fmtTime(d.expectedArrival), note:null, plat:null,
-    }));
+    const isTram = stop.isTram;
+    const rows=data
+      .filter(d=>!isTram || d.direction==='inbound')
+      .sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6).map(d=>({
+        route: isTram ? '' : d.lineName,
+        pillClass: isTram ? 'pill-tube-tramlink' : null,
+        dest: d.destinationName||d.towards||'—',
+        mins: Math.round(d.timeToStation/60), time: fmtTime(d.expectedArrival), note:null, plat:null,
+      }));
     busCache[key]=rows;
-    if(el) el.innerHTML=rows.length ? rows.map(r=>depRow(r,'bus',null)).join('') : '<div class="state-row">No upcoming departures</div>';
+    const type = isTram ? 'tram' : 'bus';
+    if(el) el.innerHTML=rows.length ? rows.map(r=>depRow(r,type,null)).join('') : '<div class="state-row">No upcoming departures</div>';
   }catch(e){
     if(el) el.innerHTML=errorHTML('Could not load');
   }
@@ -622,15 +664,23 @@ function buildStationTabs(){
     panel.id='spanel-'+st.crs;
 
     let filterBar='';
+    const hasGroups = st.nrGroups && st.nrGroups.length > 0;
+    const segControl = hasGroups ? `
+      <div class="seg-control">
+        <button class="seg-btn active" id="seg-grouped-${st.crs}" onclick="setViewMode('${st.crs}','grouped')">Grouped</button>
+        <button class="seg-btn" id="seg-platform-${st.crs}" onclick="setViewMode('${st.crs}','platform')">By Platform</button>
+      </div>` : '';
     if(FILTER_STATIONS.includes(st.crs)){
       filterBar=`<div class="filter-bar">
         <button class="filter-btn" id="filter-${st.crs}" onclick="toggleFilter('${st.crs}')">
           <span class="filter-dot"></span> To Raynes Park / Wimbledon Chase
         </button>
+        ${segControl}
         <button class="station-refresh-btn" id="stn-refresh-${st.crs}" onclick="refreshStation('${st.crs}')" title="Refresh">↻</button>
       </div>`;
     } else {
       filterBar=`<div class="filter-bar">
+        ${segControl}
         <button class="station-refresh-btn" id="stn-refresh-${st.crs}" onclick="refreshStation('${st.crs}')" title="Refresh">↻</button>
       </div>`;
     }
@@ -647,6 +697,15 @@ function selectStation(crs){
     loadedStations.add(crs);
     fetchStation(crs);
   }
+}
+
+function setViewMode(crs, mode){
+  viewMode[crs] = mode;
+  const gBtn = document.getElementById('seg-grouped-'+crs);
+  const pBtn = document.getElementById('seg-platform-'+crs);
+  if(gBtn) gBtn.classList.toggle('active', mode==='grouped');
+  if(pBtn) pBtn.classList.toggle('active', mode==='platform');
+  if(stationCache[crs]) renderStationData(crs, stationCache[crs]);
 }
 
 async function refreshStation(crs){
@@ -775,23 +834,98 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
   let html='';
 
   // ── NR GROUPS (predefined platform groups) ──
-  if(st.nrGroups){
+  const currentMode = viewMode[crs] || 'grouped';
+
+  if(st.nrGroups && currentMode === 'grouped'){
+    // Handle dynamic platform routing (e.g. Clapham Junction plat 17)
+    if(st.dynamicPlatforms){
+      Object.entries(st.dynamicPlatforms).forEach(([plat, opMap])=>{
+        if(!byPlat[plat]) return;
+        byPlat[plat].forEach(row=>{
+          const targetLabel = opMap[row.op] || 'Other';
+          const targetGrp = st.nrGroups.find(g=>g.label===targetLabel);
+          if(targetGrp){
+            if(!byPlat['_dyn_'+targetLabel]) byPlat['_dyn_'+targetLabel]=[];
+            byPlat['_dyn_'+targetLabel].push({...row, plat});
+          } else {
+            if(!byPlat['_dyn_Other']) byPlat['_dyn_Other']=[];
+            byPlat['_dyn_Other'].push({...row, plat});
+          }
+        });
+        delete byPlat[plat];
+      });
+    }
+
+    // Handle Vauxhall dynamic grouping
+    if(st.dynamicGroups && st.crs==='VXH'){
+      // Fixed group plats already defined (6,8 = South West Main Line)
+      // Remaining: dest=London Waterloo → London Waterloo group
+      //            other dest → Waterloo-Reading line
+      //            anything else → Other
+      const fixedPlats = st.nrGroups.flatMap(g=>g.plats);
+      Object.keys(byPlat).forEach(plat=>{
+        if(fixedPlats.includes(plat)) return;
+        byPlat[plat].forEach(row=>{
+          const dest=(row.dest||'').toLowerCase();
+          let targetLabel = dest.includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line';
+          if(!byPlat['_dyn_'+targetLabel]) byPlat['_dyn_'+targetLabel]=[];
+          byPlat['_dyn_'+targetLabel].push({...row, plat});
+        });
+        delete byPlat[plat];
+      });
+      // Add dynamic groups to nrGroups rendering
+      ['London Waterloo','Waterloo-Reading line','Other'].forEach(label=>{
+        const key='_dyn_'+label;
+        if(byPlat[key] && byPlat[key].length){
+          const rows=byPlat[key].sort((a,b)=>a.mins-b.mins);
+          const chips=[...new Set(rows.map(r=>r.plat).filter(Boolean))].map(p=>`<span class="plat-chip">Plat ${p}</span>`).join('');
+          html+=`<div class="stop-card" style="margin-bottom:12px">
+            <div class="stop-header"><div class="stop-name-row"><div>
+              <div class="stop-name">${label}</div>
+              <div class="plat-chips">${chips}</div>
+            </div></div></div>
+            <div>${renderRows(rows,'train',crs)}</div>
+          </div>`;
+          delete byPlat[key];
+        }
+      });
+    }
+
+    // Handle Clapham Junction dynamic grouping for plat 17
+    if(st.dynamicGroups && st.crs==='CLJ'){
+      ['Brighton Main Line','London Overground'].forEach(label=>{
+        const key='_dyn_'+label;
+        if(byPlat[key] && byPlat[key].length){
+          // Merge into existing group rows
+          const grp = st.nrGroups.find(g=>g.label===label);
+          if(grp){
+            if(!byPlat['_merge_'+label]) byPlat['_merge_'+label]=[];
+            byPlat['_merge_'+label].push(...byPlat[key]);
+          }
+          delete byPlat[key];
+        }
+      });
+    }
+
     st.nrGroups.forEach(grp=>{
       const rows=[];
       grp.plats.forEach(p=>{
         if(byPlat[p]) rows.push(...byPlat[p]);
         delete byPlat[p];
       });
-      if(!rows.length) return; // hide empty groups
+      // Merge in any dynamic rows for this group
+      const mergeKey='_merge_'+grp.label;
+      if(byPlat[mergeKey]){ rows.push(...byPlat[mergeKey]); delete byPlat[mergeKey]; }
+      const dynKey='_dyn_'+grp.label;
+      if(byPlat[dynKey]){ rows.push(...byPlat[dynKey]); delete byPlat[dynKey]; }
+      if(!rows.length) return;
       rows.sort((a,b)=>a.mins-b.mins);
       const chips=grp.plats.map(p=>`<span class="plat-chip">Plat ${p}</span>`).join('');
       html+=`<div class="stop-card" style="margin-bottom:12px">
-        <div class="stop-header">
-          <div class="stop-name-row"><div>
-            <div class="stop-name">${grp.label}</div>
-            <div class="plat-chips">${chips}</div>
-          </div></div>
-        </div>
+        <div class="stop-header"><div class="stop-name-row"><div>
+          <div class="stop-name">${grp.label}</div>
+          <div class="plat-chips">${chips}</div>
+        </div></div></div>
         <div>${renderRows(rows,'train',crs)}</div>
       </div>`;
     });
@@ -799,9 +933,16 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
 
   // ── REMAINING NR PLATFORMS (no predefined group) ──
   // Sort numerically, TBA last
-  const remainingPlats=Object.keys(byPlat).sort((a,b)=>{
+  // Custom platform sort orders for specific stations
+  const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
+  const firstPlat = PLAT_FIRST[crs] || [];
+
+  const remainingPlats=Object.keys(byPlat).filter(p=>!p.startsWith('_')).sort((a,b)=>{
     if(a==='TBA') return 1; if(b==='TBA') return -1;
-    // letters (Waterloo East A,B,C,D) sort alphabetically
+    const aFirst=firstPlat.indexOf(a), bFirst=firstPlat.indexOf(b);
+    if(aFirst>=0 && bFirst<0) return -1;
+    if(bFirst>=0 && aFirst<0) return 1;
+    if(aFirst>=0 && bFirst>=0) return aFirst-bFirst;
     const na=parseInt(a), nb=parseInt(b);
     if(isNaN(na)&&isNaN(nb)) return a.localeCompare(b);
     if(isNaN(na)) return 1; if(isNaN(nb)) return -1;
