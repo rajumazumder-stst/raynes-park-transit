@@ -859,38 +859,19 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
       });
     }
 
-    // Handle Vauxhall dynamic grouping
+    // Handle Vauxhall dynamic grouping — route remaining platforms into _dyn_ keys
+    // nrGroups.forEach below will pick them up via dynKey in the correct order
     if(st.dynamicGroups && st.crs==='VXH'){
-      // Fixed group plats already defined (6,8 = South West Main Line)
-      // Remaining: dest=London Waterloo → London Waterloo group
-      //            other dest → Waterloo-Reading line
-      //            anything else → Other
       const fixedPlats = st.nrGroups.flatMap(g=>g.plats);
-      Object.keys(byPlat).forEach(plat=>{
+      Object.keys(byPlat).filter(p=>!p.startsWith('_')).forEach(plat=>{
         if(fixedPlats.includes(plat)) return;
-        byPlat[plat].forEach(row=>{
+        (byPlat[plat]||[]).forEach(row=>{
           const dest=(row.dest||'').toLowerCase();
-          let targetLabel = dest.includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line';
+          const targetLabel = dest.includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line';
           if(!byPlat['_dyn_'+targetLabel]) byPlat['_dyn_'+targetLabel]=[];
           byPlat['_dyn_'+targetLabel].push({...row, plat});
         });
         delete byPlat[plat];
-      });
-      // Add dynamic groups to nrGroups rendering
-      ['London Waterloo','Waterloo-Reading line','Other'].forEach(label=>{
-        const key='_dyn_'+label;
-        if(byPlat[key] && byPlat[key].length){
-          const rows=byPlat[key].sort((a,b)=>a.mins-b.mins);
-          const chips=[...new Set(rows.map(r=>r.plat).filter(Boolean))].map(p=>`<span class="plat-chip">Plat ${p}</span>`).join('');
-          html+=`<div class="stop-card" style="margin-bottom:12px">
-            <div class="stop-header"><div class="stop-name-row"><div>
-              <div class="stop-name">${label}</div>
-              <div class="plat-chips">${chips}</div>
-            </div></div></div>
-            <div>${renderRows(rows,'train',crs)}</div>
-          </div>`;
-          delete byPlat[key];
-        }
       });
     }
 
