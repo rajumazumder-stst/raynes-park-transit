@@ -952,70 +952,102 @@ function renderStationData(crs,{nrData,tubeData,tramData}){
   // ── TUBE ──
   if(tubeData&&st.tube){
     html+=`<div class="section-label" style="margin-top:8px">London Underground</div>`;
-    st.tube.forEach(lineCfg=>{
-      const arrivals=tubeData[lineCfg.line]||[];
-      if(!arrivals.length) return;
-      // Group by platform
-      const tubePlats={};
-      arrivals.forEach(a=>{
-        const p=a.platformName||lineCfg.line;
-        if(!tubePlats[p]) tubePlats[p]=[];
-        const mins=Math.round(a.timeToStation/60);
-        if(mins>15) return;
-        tubePlats[p].push({
-          route:'', pillClass:lineCfg.pillClass,
-          dest:a.destinationName||a.towards||'—',
-          mins, time:fmtTime(a.expectedArrival),
-          note:a.platformName||null, plat:null,
-        });
-      });
-      // For district at Wimbledon — combine all platforms into one card
-      const isCombined = lineCfg.line==='district' && crs==='WIM';
-      if(isCombined){
-        const allRows=Object.values(tubePlats).flat().sort((a,b)=>a.mins-b.mins);
-        if(!allRows.length) return;
-        // Add platform info as note
+
+    // Check if this station merges multiple lines into shared platform cards (e.g. Blackfriars District+Circle)
+    const mergeLines = st.tube.length > 1 && st.tube.every(l=>l.stopId===st.tube[0].stopId) && crs!=='WAT';
+
+    if(mergeLines){
+      // Merge all lines into shared platform buckets keyed by platformName
+      const mergedPlats = {};
+      st.tube.forEach(lineCfg=>{
+        const arrivals = tubeData[lineCfg.line]||[];
         arrivals.forEach(a=>{
-          const mins=Math.round(a.timeToStation/60);
+          const mins = Math.round(a.timeToStation/60);
           if(mins>15) return;
-        });
-        // Build combined rows with plat from platformName
-        const combinedRows=arrivals
-          .filter(a=>Math.round(a.timeToStation/60)<=15)
-          .sort((a,b)=>a.timeToStation-b.timeToStation)
-          .map(a=>({
+          const p = a.platformName||lineCfg.line;
+          if(!mergedPlats[p]) mergedPlats[p]=[];
+          mergedPlats[p].push({
             route:'', pillClass:lineCfg.pillClass,
             dest:a.destinationName||a.towards||'—',
-            mins:Math.round(a.timeToStation/60),
-            time:fmtTime(a.expectedArrival),
-            note:a.towards||null,
-            plat:a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null,
-          }));
-        const platNums=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))];
-        const chips=platNums.map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
-        html+=`<div class="stop-card" style="margin-bottom:12px">
-          <div class="stop-header"><div class="stop-name-row"><div>
-            <div class="stop-name">${lineCfg.label}</div>
-            <div class="plat-chips">${chips}</div>
-          </div></div></div>
-          <div>${combinedRows.map(r=>depRow(r,'tube',crs)).join('')||'<div class="state-row">No upcoming departures</div>'}</div>
-        </div>`;
-      } else {
-        Object.entries(tubePlats).sort(([a],[b])=>a.localeCompare(b)).forEach(([platName,rows])=>{
+            mins, time:fmtTime(a.expectedArrival),
+            note:null, plat:null,
+          });
+        });
+      });
+      // Sort platforms: Eastbound first, Westbound second
+      const platOrder = (p)=> p.toLowerCase().includes('east') ? 0 : p.toLowerCase().includes('west') ? 1 : 2;
+      Object.entries(mergedPlats)
+        .sort(([a],[b])=> platOrder(a)-platOrder(b) || a.localeCompare(b))
+        .forEach(([platName,rows])=>{
           if(!rows.length) return;
-          // For W&C line hide if no services
-          if(lineCfg.line==='waterloo-city'&&!rows.length) return;
           rows.sort((a,b)=>a.mins-b.mins);
+          // Derive clean label: "Eastbound" or "Westbound" from platformName
+          const dirMatch = platName.match(/eastbound|westbound/i);
+          const cardLabel = dirMatch ? dirMatch[0].charAt(0).toUpperCase()+dirMatch[0].slice(1).toLowerCase() : platName;
           html+=`<div class="stop-card" style="margin-bottom:12px">
             <div class="stop-header"><div class="stop-name-row"><div>
-              <div class="stop-name">${lineCfg.label}</div>
-              <div class="stop-sub">${platName}</div>
+              <div class="stop-name">${cardLabel}</div>
             </div></div></div>
             <div>${rows.map(r=>depRow(r,'tube',crs)).join('')}</div>
           </div>`;
         });
-      }
-    });
+    } else {
+      st.tube.forEach(lineCfg=>{
+        const arrivals=tubeData[lineCfg.line]||[];
+        if(!arrivals.length) return;
+        const tubePlats={};
+        arrivals.forEach(a=>{
+          const p=a.platformName||lineCfg.line;
+          if(!tubePlats[p]) tubePlats[p]=[];
+          const mins=Math.round(a.timeToStation/60);
+          if(mins>15) return;
+          tubePlats[p].push({
+            route:'', pillClass:lineCfg.pillClass,
+            dest:a.destinationName||a.towards||'—',
+            mins, time:fmtTime(a.expectedArrival),
+            note:a.towards||null, plat:null,
+          });
+        });
+        // For district at Wimbledon — combine all platforms into one card
+        const isCombined = lineCfg.line==='district' && crs==='WIM';
+        if(isCombined){
+          const combinedRows=arrivals
+            .filter(a=>Math.round(a.timeToStation/60)<=15)
+            .sort((a,b)=>a.timeToStation-b.timeToStation)
+            .map(a=>({
+              route:'', pillClass:lineCfg.pillClass,
+              dest:a.destinationName||a.towards||'—',
+              mins:Math.round(a.timeToStation/60),
+              time:fmtTime(a.expectedArrival),
+              note:a.towards||null,
+              plat:a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null,
+            }));
+          if(!combinedRows.length) return;
+          const platNums=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))];
+          const chips=platNums.map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
+          html+=`<div class="stop-card" style="margin-bottom:12px">
+            <div class="stop-header"><div class="stop-name-row"><div>
+              <div class="stop-name">${lineCfg.label}</div>
+              <div class="plat-chips">${chips}</div>
+            </div></div></div>
+            <div>${combinedRows.map(r=>depRow(r,'tube',crs)).join('')}</div>
+          </div>`;
+        } else {
+          Object.entries(tubePlats).sort(([a],[b])=>a.localeCompare(b)).forEach(([platName,rows])=>{
+            if(!rows.length) return;
+            if(lineCfg.line==='waterloo-city'&&!rows.length) return;
+            rows.sort((a,b)=>a.mins-b.mins);
+            html+=`<div class="stop-card" style="margin-bottom:12px">
+              <div class="stop-header"><div class="stop-name-row"><div>
+                <div class="stop-name">${lineCfg.label}</div>
+                <div class="stop-sub">${platName}</div>
+              </div></div></div>
+              <div>${rows.map(r=>depRow(r,'tube',crs)).join('')}</div>
+            </div>`;
+          });
+        }
+      });
+    }
   }
 
   // ── TRAM ──
