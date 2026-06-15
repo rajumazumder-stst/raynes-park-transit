@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>NR Diagnostic</title>
+  <style>
+    body{background:#060c18;color:#e8f0fc;font-family:'Courier New',monospace;padding:20px;font-size:13px}
+    h2{color:#2a7fff;margin:20px 0 8px;font-size:14px}
+    .ok{color:#00e676} .err{color:#ff4d6a} .warn{color:#ffb340} .dim{color:#6a85aa}
+    pre{background:#0e1828;border:1px solid #1e3050;border-radius:8px;padding:14px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto}
+    .row{display:flex;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px solid #1e3050}
+    .plat{width:60px;flex-shrink:0;color:#ffb340;font-weight:bold}
+    .dest{flex:1}
+    .time{color:#6a85aa;width:50px;text-align:right}
+    .mins{width:60px;text-align:right}
+    .mins.due{color:#ff4d6a} .mins.soon{color:#ffb340} .mins.ok{color:#00c9a7}
+    .card{background:#0e1828;border:1px solid #1e3050;border-radius:8px;padding:12px;margin:8px 0}
+    select,button{background:#0e1828;border:1px solid #1e3050;border-radius:6px;color:#e8f0fc;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:13px}
+    button:hover{border-color:#2a7fff}
+    .badge{display:inline-block;font-size:9px;font-weight:700;border-radius:3px;padding:1px 5px;margin-left:4px;vertical-align:middle}
+    .test-badge{background:rgba(255,179,64,0.2);border:1px solid #ffb340;color:#ffb340}
+  </style>
+</head>
+<body>
+
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+  <div style="font-size:16px;font-weight:bold">NR DIAGNOSTIC</div>
+  <span class="badge test-badge">TEST</span>
+</div>
+
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+  <select id="crsSelect">
+    <option value="RAY">Raynes Park (RAY)</option>
+    <option value="WBO">Wimbledon Chase (WBO)</option>
+    <option value="WAT">London Waterloo (WAT)</option>
+    <option value="VXH">Vauxhall (VXH)</option>
+    <option value="NEM">New Malden (NEM)</option>
+    <option value="WIM">Wimbledon (WIM)</option>
+    <option value="NBT">Norbiton (NBT)</option>
+    <option value="CLJ">Clapham Junction (CLJ)</option>
+    <option value="KNG">Kingston (KNG)</option>
+    <option value="PUT">Putney (PUT)</option>
+    <option value="SNS">Staines (SNS)</option>
+    <option value="BFR">Blackfriars (BFR)</option>
+    <option value="WAE">Waterloo East (WAE)</option>
+  </select>
+  <button onclick="runTest()">Run Test</button>
+</div>
+
+<div id="output"></div>
+
+<script>
+const HIGHLIGHT_STOPS = ['Raynes Park','Wimbledon Chase'];
+const ATOC_MAP = { SW:'SW',TL:'TL',SN:'SN',SE:'SE',LO:'LO',GX:'GX',CS:'SW',VT:'SW',XR:'SW' };
+const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
+
+function minsFromNow(s){
+  if(!s) return null;
+  const now=new Date(); let t;
+  if(s.includes('T')){ t=new Date(s); }
+  else{
+    const[h,m]=s.split(':').map(Number);
+    if(isNaN(h)||isNaN(m)) return null;
+    t=new Date(); t.setHours(h,m,0,0); if(t<now) t.setDate(t.getDate()+1);
+  }
+  const mins = Math.round((t-now)/60000);
+  return isNaN(mins) ? null : mins;
+}
+
+function fmtTime(s){ if(!s) return '--:--'; if(s.includes('T')) return s.slice(11,16); return s.slice(0,5); }
+
+function isHighlight(dest, cps){
+  if(cps&&cps.length) return cps.some(cp=>HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase())));
+  if(!dest) return false;
+  return HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase()));
+}
+
+function classifyVXH(row){ return (row.dest||'').toLowerCase().includes('london waterloo')?'London Waterloo':'Waterloo-Reading line'; }
+
+async function runTest(){
+  const crs = document.getElementById('crsSelect').value;
+  const out = document.getElementById('output');
+  out.innerHTML = '<div class="dim">Fetching /api/trains?crs='+crs+'&rows=50 ...</div>';
+
+  // ── STEP 1: Raw API call ──────────────────────────────────────────
+  let data;
+  let step1html = '';
+  try{
+    const t0 = Date.now();
+    const res = await fetch(`/api/trains?crs=${crs}&rows=50`, {signal:AbortSignal.timeout(12000)});
+    const elapsed = Date.now()-t0;
+    step1html += `<h2>Step 1: API Call</h2>`;
+    step1html += `<div class="${res.ok?'ok':'err'}">HTTP ${res.status} ${res.statusText} (${elapsed}ms)</div>`;
+    if(!res.ok){
+      const txt = await res.text();
+      step1html += `<pre>${escHtml(txt.slice(0,1000))}</pre>`;
+      out.innerHTML = step1html;
+      return;
+    }
+    data = await res.json();
+    if(data.error){
+      step1html += `<div class="err">API error: ${escHtml(data.error)}</div>`;
+      if(data.detail) step1html += `<pre>${escHtml(data.detail)}</pre>`;
+      out.innerHTML = step1html;
+      return;
+    }
+    const svcCount = (data.services||[]).length;
+    const msgCount = (data.messages||[]).length;
+    step1html += `<div class="ok">OK — ${svcCount} service(s), ${msgCount} message(s)</div>`;
+  }catch(e){
+    step1html += `<h2>Step 1: API Call</h2><div class="err">FETCH ERROR: ${escHtml(e.message)}</div>`;
+    out.innerHTML = step1html;
+    return;
+  }
+
+  // ── STEP 2: Raw JSON ─────────────────────────────────────────────
+  let step2html = '<h2>Step 2: Raw JSON (first 3 services)</h2>';
+  const preview = { services:(data.services||[]).slice(0,3), messages:data.messages||[] };
+  step2html += `<pre>${escHtml(JSON.stringify(preview,null,2))}</pre>`;
+
+  // ── STEP 3: Parse services ───────────────────────────────────────
+  let step3html = '<h2>Step 3: Parsed Departures</h2>';
+  const byPlat = {};
+  let affectedCount = 0;
+  const parseErrors = [];
+
+  (data.services||[]).forEach((svc,i)=>{
+    try{
+      const plat = svc.platform||'TBA';
+      const {std,etd} = svc;
+      const isCancelled = etd==='Cancelled';
+      const isDelayed = etd&&etd!=='On time'&&etd!=='Cancelled'&&etd!==std&&/^\d{2}:\d{2}$/.test(etd);
+      if(isCancelled){ affectedCount++; return; }
+      if(isDelayed) affectedCount++;
+      const displayTime = (etd&&/^\d{2}:\d{2}$/.test(etd))?etd:(std||'--:--');
+      const mins = minsFromNow(displayTime);
+      if(mins===null||mins<-2||mins>30) return;
+      const op = ATOC_MAP[(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase()]||'';
+      if(!byPlat[plat]) byPlat[plat]=[];
+      byPlat[plat].push({ op, dest:svc.destination||'—', mins, time:displayTime, plat,
+        callingPoints:svc.callingPoints||null });
+    }catch(e){ parseErrors.push(`svc[${i}]: ${e.message}`); }
+  });
+
+  if(parseErrors.length){
+    step3html += `<div class="err">Parse errors:<br>${parseErrors.map(escHtml).join('<br>')}</div>`;
+  }
+
+  const platCount = Object.keys(byPlat).length;
+  const rowCount  = Object.values(byPlat).reduce((n,r)=>n+r.length,0);
+  step3html += `<div class="${rowCount>0?'ok':'warn'}">${rowCount} row(s) across ${platCount} platform(s) (${affectedCount} affected/cancelled filtered out)</div>`;
+  step3html += '<div class="card">';
+  Object.entries(byPlat).forEach(([p,rows])=>{
+    rows.forEach(r=>{
+      const hi = isHighlight(r.dest, r.callingPoints);
+      const cls = r.mins<=3?'due':r.mins<=8?'soon':'ok';
+      step3html += `<div class="row"><span class="plat">[${p}]</span><span class="dest">${r.op?`[${r.op}] `:''}${escHtml(r.dest)}${hi?' ★':''}</span><span class="time">${r.time}</span><span class="mins ${cls}">${r.mins}m</span></div>`;
+    });
+  });
+  step3html += '</div>';
+
+  // ── STEP 4: PLAT_FIRST sort test ─────────────────────────────────
+  let step4html = '<h2>Step 4: PLAT_FIRST + Sort</h2>';
+  try{
+    const firstPlat = PLAT_FIRST[crs]||[];
+    step4html += `<div class="ok">PLAT_FIRST[${crs}] = [${firstPlat.join(', ')||'(empty)'}]</div>`;
+    const sorted = Object.keys(byPlat).filter(p=>!p.startsWith('_')).sort((a,b)=>{
+      if(a==='TBA') return 1; if(b==='TBA') return -1;
+      const ai=firstPlat.indexOf(a),bi=firstPlat.indexOf(b);
+      if(ai>=0&&bi<0) return -1; if(bi>=0&&ai<0) return 1;
+      if(ai>=0&&bi>=0) return ai-bi;
+      const na=parseInt(a),nb=parseInt(b);
+      if(isNaN(na)&&isNaN(nb)) return a.localeCompare(b);
+      if(isNaN(na)) return 1; if(isNaN(nb)) return -1;
+      return na-nb;
+    });
+    step4html += `<div class="ok">Platform sort order: ${sorted.join(' → ')||'(none)'}</div>`;
+  }catch(e){
+    step4html += `<div class="err">ERROR: ${escHtml(e.message)}<br><pre>${escHtml(e.stack)}</pre></div>`;
+  }
+
+  // ── STEP 5: VXH dynamic grouping test ────────────────────────────
+  let step5html = '';
+  if(crs==='VXH'){
+    step5html = '<h2>Step 5: Vauxhall Dynamic Grouping</h2>';
+    try{
+      const fixed=['6','8'];
+      let dynCount=0;
+      Object.keys(byPlat).filter(p=>!p.startsWith('_')).forEach(plat=>{
+        if(fixed.includes(plat)) return;
+        (byPlat[plat]||[]).forEach(row=>{
+          const label=classifyVXH(row);
+          dynCount++;
+          step5html+=`<div class="dim">Plat ${plat} → "${label}" (dest: ${escHtml(row.dest)})</div>`;
+        });
+      });
+      step5html+=`<div class="ok">${dynCount} service(s) dynamically routed</div>`;
+    }catch(e){
+      step5html+=`<div class="err">ERROR: ${escHtml(e.message)}</div>`;
+    }
+  }
+
+  // ── STEP 6: minsFromNow edge cases ───────────────────────────────
+  let step6html = '<h2>Step 6: minsFromNow Edge Cases</h2>';
+  const testCases = ['On time','Cancelled','Delayed','--:--','23:59','00:01'];
+  testCases.forEach(tc=>{
+    const result = minsFromNow(tc);
+    step6html += `<div><span class="dim">"${tc}" →</span> <span class="${result===null?'warn':'ok'}">${result===null?'null (filtered)':result+'min'}</span></div>`;
+  });
+
+  out.innerHTML = step1html + step2html + step3html + step4html + step5html + step6html;
+}
+
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Auto-run on load
+runTest();
+</script>
+</body>
+</html>
