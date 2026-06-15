@@ -369,10 +369,8 @@ const LOCATIONS = [
 
 const OP_PILL  = { SW:'pill-SW', TL:'pill-TL', SN:'pill-SN', SE:'pill-SE', LO:'pill-LO', GX:'pill-GX' };
 const ATOC_MAP = { 'SW':'SW','TL':'TL','SN':'SN','SE':'SE','LO':'LO','GX':'GX','CS':'SW','VT':'SW','XR':'SW' };
+const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
 
-// ── STATE ─────────────────────────────────────────────────────────
-// Removed loadedNeigh — bus neighbourhoods always re-fetch on tab switch
-// so stale data is never a problem and failed initial loads can be retried.
 const S = {
   currentIdx: 0,
   filterActive: {},  // locId → bool
