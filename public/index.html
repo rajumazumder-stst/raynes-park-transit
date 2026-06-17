@@ -392,7 +392,7 @@ LOCATIONS.forEach(loc=>getAllBusStops(loc).forEach(s=>{ STOP_MAP[s.key]=s; }));
 // ══════════════════════════════════════════════════════════════════
 // CLOCK
 // ══════════════════════════════════════════════════════════════════
-function updateClock(){ document.getElementById('clock').textContent = new Date().toTimeString().slice(0,5); }
+function updateClock(){ document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
 setInterval(updateClock,1000); updateClock();
 
 // ══════════════════════════════════════════════════════════════════
@@ -406,7 +406,11 @@ function minsFromNow(s){
   else{ const[h,m]=s.split(':').map(Number); t=new Date(); t.setHours(h,m,0,0); if(t<now) t.setDate(t.getDate()+1); }
   return Math.round((t-now)/60000);
 }
-function fmtTime(s){ if(!s) return '--:--'; if(s.includes('T')) return s.slice(11,16); return s.slice(0,5); }
+function fmtTime(s){
+  if(!s) return '--:--';
+  if(s.includes('T')) return new Date(s).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'});
+  return s.slice(0,5);
+}
 function isHighlight(dest,callingPoints){
   if(callingPoints&&callingPoints.length) return callingPoints.some(cp=>HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase())));
   if(!dest) return false;
@@ -414,7 +418,7 @@ function isHighlight(dest,callingPoints){
 }
 function loadingHTML(){ return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>'; }
 function errorHTML(msg){ return `<div class="state-row" style="color:var(--accent-red)">\u26a0 ${msg}</div>`; }
-function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toTimeString().slice(0,5); }
+function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
 function getLetter(stop){ return stop.letter!==undefined ? stop.letter : stop.key.split('_').pop(); }
 
 // ══════════════════════════════════════════════════════════════════
