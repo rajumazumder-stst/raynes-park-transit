@@ -6,6 +6,11 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
+  if (!process.env.TFL_KEY) {
+    res.status(500).json({ error: 'TFL_KEY env var not set' });
+    return;
+  }
+
   const path = req.query.path;
   if (!path || !ALLOWED.test(path)) {
     res.status(400).json({ error: 'Invalid or missing path parameter' });

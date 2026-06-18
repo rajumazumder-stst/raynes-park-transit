@@ -5,6 +5,11 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
+  if (!process.env.LDBWS_TOKEN) {
+    res.status(500).json({ error: 'LDBWS_TOKEN env var not set' });
+    return;
+  }
+
   const crs     = (req.query.crs || 'RAY').toUpperCase().slice(0, 3);
   const numRows = Math.min(parseInt(req.query.rows || '20'), 50);
   const url     = `${LDBWS_BASE}/GetDepBoardWithDetails/${crs}?numRows=${numRows}&timeWindow=30`;
