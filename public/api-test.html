@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API test — tfl.js + trains-v2.js</title>
+<style>
+  body { font-family: monospace; background: #060c18; color: #cdd9f0; padding: 20px; }
+  h2 { color: #2a7fff; margin-top: 32px; }
+  h3 { color: #00c9a7; margin: 20px 0 8px; }
+  select, button { background: #0e1828; color: #cdd9f0; border: 1px solid #1e3050; padding: 6px 12px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer; }
+  button { color: #2a7fff; margin-left: 8px; }
+  .pass { color: #00e676; } .fail { color: #ff4d6a; } .warn { color: #ffb340; }
+  .result { background: #0e1828; border: 1px solid #1e3050; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+  .row { margin: 4px 0; font-size: 13px; }
+  .calling { color: #868f98; font-size: 12px; }
+  .highlight { color: #00e676; font-weight: bold; }
+  hr { border-color: #1e3050; margin: 32px 0; }
+</style>
+</head>
+<body>
+
+<h2>TfL proxy — <code>/api/tfl</code></h2>
+<p style="color:#868f98;font-size:13px">Tests that the proxy correctly fetches arrivals without exposing the key client-side.</p>
+
+<div>
+  <label>Bus stop (NaPTAN): <select id="naptan">
+    <option value="490004647E">490004647E — Raynes Park (E)</option>
+    <option value="490004647W">490004647W — Raynes Park (W)</option>
+    <option value="490001237G">490001237G — Wimbledon Chase</option>
+  </select></label>
+  <button onclick="testBusProxy()">Test StopPoint</button>
+</div>
+<div id="bus-result" class="result" style="margin-top:8px">Press button to test…</div>
+
+<div style="margin-top:16px">
+  <label>Tube/Tram line + stop: <select id="lineStop">
+    <option value="district/940GZZLUWIM">district / 940GZZLUWIM (Wimbledon District)</option>
+    <option value="tram/940GZZCRWMB">tram / 940GZZCRWMB (Wimbledon Tram)</option>
+    <option value="northern/940GZZLUSWN">northern / 940GZZLUSWN (South Wimbledon)</option>
+  </select></label>
+  <button onclick="testLineProxy()">Test Line/Arrivals</button>
+</div>
+<div id="line-result" class="result" style="margin-top:8px">Press button to test…</div>
+
+<hr>
+
+<h2>National Rail — <code>/api/trains-v2</code></h2>
+<p style="color:#868f98;font-size:13px">Tests the new REST-based trains endpoint with inline calling points.</p>
+
+<div>
+  <label>Station CRS: <select id="crs">
+    <option>RAY</option><option>WBO</option><option>WAT</option><option>VXH</option>
+    <option>NEM</option><option>WIM</option><option>NBT</option><option>CLJ</option>
+    <option>KNG</option><option>PUT</option><option>SNS</option><option>BFR</option><option>WAE</option>
+  </select></label>
+  <button onclick="testTrains()">Fetch departures</button>
+</div>
+<div id="trains-result" class="result" style="margin-top:8px">Press button to test…</div>
+
+<script>
+const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
+
+async function testBusProxy() {
+  const naptan = document.getElementById('naptan').value;
+  const el = document.getElementById('bus-result');
+  el.innerHTML = 'Loading…';
+  try {
+    const res = await fetch(`/api/tfl?path=StopPoint/${naptan}/Arrivals`);
+    if (!res.ok) { el.innerHTML = `<span class="fail">✗ HTTP ${res.status}: ${await res.text()}</span>`; return; }
+    const data = await res.json();
+    if (!Array.isArray(data)) { el.innerHTML = `<span class="fail">✗ Expected array, got: ${JSON.stringify(data).slice(0,100)}</span>`; return; }
+    el.innerHTML = `<span class="pass">✓ ${data.length} arrivals</span>` +
+      data.slice(0,4).map(d => `<div class="row">${d.lineName} → ${d.destinationName || d.towards} in ${Math.round(d.timeToStation/60)} min</div>`).join('');
+  } catch(e) { el.innerHTML = `<span class="fail">✗ ${e.message}</span>`; }
+}
+
+async function testLineProxy() {
+  const [line, stopId] = document.getElementById('lineStop').value.split('/');
+  const el = document.getElementById('line-result');
+  el.innerHTML = 'Loading…';
+  try {
+    const res = await fetch(`/api/tfl?path=Line/${line}/Arrivals/${stopId}`);
+    if (!res.ok) { el.innerHTML = `<span class="fail">✗ HTTP ${res.status}: ${await res.text()}</span>`; return; }
+    const data = await res.json();
+    if (!Array.isArray(data)) { el.innerHTML = `<span class="fail">✗ Expected array, got: ${JSON.stringify(data).slice(0,100)}</span>`; return; }
+    el.innerHTML = `<span class="pass">✓ ${data.length} arrivals</span>` +
+      data.slice(0,4).map(d => `<div class="row">${d.lineName} → ${d.destinationName || d.towards} | plat: ${d.platformName} | in ${Math.round(d.timeToStation/60)} min</div>`).join('');
+  } catch(e) { el.innerHTML = `<span class="fail">✗ ${e.message}</span>`; }
+}
+
+async function testTrains() {
+  const crs = document.getElementById('crs').value;
+  const el = document.getElementById('trains-result');
+  el.innerHTML = 'Loading…';
+  try {
+    const res = await fetch(`/api/trains-v2?crs=${crs}&rows=50`);
+    const data = await res.json();
+    if (!res.ok || data.error) { el.innerHTML = `<span class="fail">✗ ${data.error || res.status}</span>`; return; }
+    el.innerHTML = `<span class="pass">✓ ${data.services.length} services</span>` +
+      (data.messages.length ? `<div class="warn">⚠ ${data.messages.length} NRCC message(s)</div>` : '') +
+      data.services.slice(0,5).map(s => {
+        const hi = s.callingPoints.some(cp => HIGHLIGHT_STOPS.some(h => cp.toLowerCase().includes(h.toLowerCase())));
+        return `<div class="row">plat ${s.platform ?? '?'} | ${s.std}→${s.etd} | ${s.operatorCode} | <span class="${hi ? 'highlight' : ''}">${s.destination}</span>` +
+          `<div class="calling">${s.callingPoints.join(' → ') || '(no stops)'}</div></div>`;
+      }).join('');
+  } catch(e) { el.innerHTML = `<span class="fail">✗ ${e.message}</span>`; }
+}
+</script>
+</body>
+</html>
