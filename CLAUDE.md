@@ -12,8 +12,9 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 
 ```
 public/index.html          Single-file PWA (all HTML + CSS + JS)
-api/trains.js              Vercel serverless function — SOAP proxy to National Rail OpenLDBWS
-api/calling-points.js      Vercel serverless function — fetches calling points per service
+api/tfl.js                 Vercel serverless function — TfL arrivals proxy (buses, tube, tram)
+api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepBoardWithDetails)
+api/calling-points.js      Vercel serverless function — NR calling points (GetServiceDetails)
 vercel.json                Routing config (do not modify)
 ```
 
@@ -24,9 +25,11 @@ vercel.json                Routing config (do not modify)
 | TfL Open Data | Buses, tube, tram arrivals | `$TFL_KEY` (Vercel env var) |
 | National Rail LDBWS | Train departures and calling points | `$LDBWS_TOKEN` (Vercel env var) |
 
-- NR SOAP endpoint: `https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb9.asmx`
-- `trains.js` is called as `/api/trains?crs=RAY&rows=50`
-- `calling-points.js` is called as `/api/calling-points?serviceId=...`
+- NR REST base: `https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120`
+- NR auth: `x-apikey` request header (raildata.org.uk consumer key)
+- `trains.js` called as `/api/trains?crs=RAY&rows=50` — returns services with `callingPoints` inline
+- `calling-points.js` called as `/api/calling-points?serviceId=...` — fallback only; calling points now included in `trains.js` response
+- `tfl.js` called as `/api/tfl?path=StopPoint/{naptan}/Arrivals` or `/api/tfl?path=Line/{line}/Arrivals/{stopId}`
 
 ---
 

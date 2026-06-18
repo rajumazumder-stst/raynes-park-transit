@@ -181,7 +181,6 @@
 // ══════════════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════════════
-const TFL_KEY = '***REMOVED***';
 const HIGHLIGHT_STOPS = ['Raynes Park','Wimbledon Chase'];
 // LOCATIONS — unified array (NR → Tube → Tram → Buses per location)
 const LOCATIONS = [
@@ -615,7 +614,7 @@ async function fetchBusStop(key){
   if(!el) return;
   el.innerHTML=loadingHTML();
   try{
-    const res=await fetch(`https://api.tfl.gov.uk/StopPoint/${stop.naptan}/Arrivals?app_key=${TFL_KEY}`,{signal:AbortSignal.timeout(10000)});
+    const res=await fetch(`/api/tfl?path=StopPoint/${stop.naptan}/Arrivals`,{signal:AbortSignal.timeout(10000)});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
     if(!Array.isArray(data)) throw new Error('Invalid response');
@@ -808,7 +807,7 @@ async function fetchAndRenderTube(loc){
   try{
     const tubeData=[];
     await Promise.all(loc.tube.map(async(lc,i)=>{
-      const res=await fetch(`https://api.tfl.gov.uk/Line/${lc.line}/Arrivals/${lc.stopId}?app_key=${TFL_KEY}`,{signal:AbortSignal.timeout(10000)});
+      const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
       tubeData[i]=res.ok?await res.json():[];
     }));
     el.innerHTML=renderTubeData(loc,tubeData);
@@ -886,7 +885,7 @@ async function fetchAndRenderTram(loc){
   try{
     const tramData=[];
     await Promise.all(loc.tram.map(async(lc,i)=>{
-      const res=await fetch(`https://api.tfl.gov.uk/Line/${lc.line}/Arrivals/${lc.stopId}?app_key=${TFL_KEY}`,{signal:AbortSignal.timeout(10000)});
+      const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
       tramData[i]=res.ok?await res.json():[];
     }));
     el.innerHTML=renderTramData(loc,tramData);
