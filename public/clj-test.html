@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLJ Departure Test</title>
+<style>
+  :root {
+    --bg:#060c18; --card:#0e1828; --card2:#132035; --border:#1e3050;
+    --blue:#2a7fff; --teal:#00c9a7; --amber:#ffb340; --red:#ff4d6a; --green:#00e676;
+    --dim:#6a85aa; --mid:#9ab0cc; --text:#e8f0fc;
+    --pill-SW:rgba(255,179,64,0.12); --pill-SW-c:#ffb340;
+    --pill-SN:rgba(0,150,90,0.15); --pill-SN-c:#00c878;
+    --pill-TL:rgba(0,160,200,0.15); --pill-TL-c:#00a0c8;
+    --pill-LO:rgba(239,123,16,0.15); --pill-LO-c:#ef7b10;
+    --pill-SE:rgba(0,115,170,0.15); --pill-SE-c:#0090d4;
+    --pill-GX:rgba(130,40,110,0.15); --pill-GX-c:#c060b0;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;padding:20px}
+  h1{font-family:monospace;font-size:18px;color:var(--blue);margin-bottom:4px}
+  .subtitle{font-size:12px;color:var(--dim);margin-bottom:20px}
+  h2{font-family:monospace;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:24px 0 8px;display:flex;align-items:center;gap:8px}
+  h2::after{content:'';flex:1;height:1px;background:var(--border)}
+  button{background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--blue);font-family:monospace;font-size:12px;padding:6px 12px;cursor:pointer;margin:0 6px 8px 0}
+  button:hover{border-color:var(--blue)}
+  button.active{background:rgba(42,127,255,.15);border-color:var(--blue)}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-family:monospace;font-size:12px}
+  .stat .val{font-size:20px;font-weight:700;color:var(--teal);display:block}
+  .stat .lbl{color:var(--dim)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
+  .card-head{background:var(--card2);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:8px}
+  .card-title{font-weight:600;font-size:14px}
+  .card-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .chip{font-family:monospace;font-size:9px;font-weight:700;background:rgba(30,48,80,.8);border:1px solid var(--border);border-radius:4px;padding:2px 5px;color:var(--dim)}
+  .row{display:grid;grid-template-columns:36px 1fr 70px 48px 52px;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid rgba(30,48,80,.5);font-size:13px}
+  .row:last-child{border-bottom:none}
+  .row.cancelled{opacity:.45;text-decoration:line-through}
+  .row.filtered{opacity:.4;background:rgba(255,77,106,.05);border-left:2px solid rgba(255,77,106,.3)}
+  .pill{display:inline-flex;align-items:center;justify-content:center;border-radius:4px;font-family:monospace;font-size:10px;font-weight:700;padding:2px 5px;min-width:30px}
+  .p-SW{background:var(--pill-SW);border:1px solid rgba(255,179,64,.3);color:var(--pill-SW-c)}
+  .p-SN{background:var(--pill-SN);border:1px solid rgba(0,150,90,.3);color:var(--pill-SN-c)}
+  .p-TL{background:var(--pill-TL);border:1px solid rgba(0,160,200,.3);color:var(--pill-TL-c)}
+  .p-LO{background:var(--pill-LO);border:1px solid rgba(239,123,16,.3);color:var(--pill-LO-c)}
+  .p-SE{background:var(--pill-SE);border:1px solid rgba(0,115,170,.3);color:var(--pill-SE-c)}
+  .p-GX{background:var(--pill-GX);border:1px solid rgba(130,40,110,.3);color:var(--pill-GX-c)}
+  .p-empty{background:rgba(30,48,80,.5);border:1px solid var(--border);color:var(--dim)}
+  .dest{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  .dep-time{font-family:monospace;font-size:11px;color:var(--mid);text-align:right}
+  .dep-mins{font-family:monospace;font-size:13px;font-weight:700;text-align:right}
+  .dep-mins.due{color:var(--red)}
+  .dep-mins.soon{color:var(--amber)}
+  .dep-mins.normal{color:var(--teal)}
+  .dep-mins.gone{color:var(--dim)}
+  .plat-tag{font-family:monospace;font-size:10px;color:var(--dim);background:rgba(30,48,80,.8);border:1px solid var(--border);border-radius:4px;padding:2px 5px;text-align:center}
+  .filter-reason{font-size:10px;color:var(--red);font-style:italic}
+  .raw{font-family:monospace;font-size:11px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;padding:14px;overflow-x:auto;white-space:pre;max-height:400px;overflow-y:auto;margin-bottom:16px;display:none}
+  .raw.open{display:block}
+  .note{font-size:10px;color:var(--amber);margin-top:1px}
+  .empty-row{padding:14px;text-align:center;color:var(--dim);font-size:13px}
+  .controls{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px;align-items:center}
+  #refreshBtn{color:var(--teal)}
+  .last-updated{font-family:monospace;font-size:11px;color:var(--dim);margin-left:auto}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<h1>CLJ Departure Test</h1>
+<p class="subtitle">Clapham Junction — live departure debug. Compares app rendering vs raw NR API data.</p>
+
+<div class="controls">
+  <button id="refreshBtn" onclick="load()">↻ Refresh</button>
+  <button onclick="toggleRaw()">{ } Raw API data</button>
+  <button id="showFilteredBtn" class="active" onclick="toggleFiltered()">Show filtered-out trains</button>
+  <span class="last-updated" id="lastUpdated">—</span>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<pre class="raw" id="rawData"></pre>
+
+<div id="output"></div>
+
+<script>
+// ── mirrors app config for CLJ ──────────────────────────────────────────────
+const ATOC_MAP = {'SW':'SW','TL':'TL','SN':'SN','SE':'SE','LO':'LO','GX':'GX','CS':'SW','VT':'SW','XR':'SW'};
+const GROUPS = [
+  { label:'South West Main Line',  plats:['9','11'] },
+  { label:'London Overground',     plats:['1','2'] },
+  { label:'London Waterloo',       plats:['3','4','7','8','10'] },
+  { label:'Waterloo-Reading line', plats:['5','6'] },
+  { label:'London Victoria',       plats:['12','14'] },
+  { label:'Brighton Main Line',    plats:['13','15'] },
+  { label:'West London Line',      plats:['16'] },
+];
+const DYNAMIC_PLAT = { '17':{ SN:'Brighton Main Line', LO:'London Overground' } };
+const PLAT_FIRST = ['11'];
+const HIGHLIGHT_STOPS = ['Raynes Park','Wimbledon Chase'];
+
+let showFiltered = true;
+let rawVisible = false;
+let rawData = null;
+
+function toggleRaw(){
+  rawVisible = !rawVisible;
+  document.getElementById('rawData').classList.toggle('open', rawVisible);
+}
+function toggleFiltered(){
+  showFiltered = !showFiltered;
+  document.getElementById('showFilteredBtn').classList.toggle('active', showFiltered);
+  if(rawData) render(rawData);
+}
+
+function minsFromNow(s){
+  if(!s) return null;
+  const now = new Date();
+  const [h,m] = s.split(':').map(Number);
+  const t = new Date(); t.setHours(h,m,0,0);
+  if(t < now) t.setDate(t.getDate()+1);
+  return Math.round((t - now) / 60000);
+}
+
+function minsLabel(m){
+  if(m <= 0) return {text:'Due', cls:'due'};
+  if(m <= 3)  return {text:m+' min', cls:'due'};
+  if(m <= 8)  return {text:m+' min', cls:'soon'};
+  if(m <= 30) return {text:m+' min', cls:'normal'};
+  return {text:m+' min', cls:'gone'};
+}
+
+function isHighlight(dest, cps){
+  if(cps && cps.length) return cps.some(cp => HIGHLIGHT_STOPS.some(h => cp.toLowerCase().includes(h.toLowerCase())));
+  return HIGHLIGHT_STOPS.some(h => (dest||'').toLowerCase().includes(h.toLowerCase()));
+}
+
+function pill(op){
+  if(!op) return `<span class="pill p-empty">?</span>`;
+  return `<span class="pill p-${op}">${op}</span>`;
+}
+
+function platTag(plat){
+  return `<span class="plat-tag">${plat||'TBA'}</span>`;
+}
+
+function depRowHtml(r, filterReason){
+  const cls = filterReason ? 'row filtered' : (r.cancelled ? 'row cancelled' : 'row');
+  const l = minsLabel(r.mins ?? 999);
+  const hi = isHighlight(r.dest, r.callingPoints);
+  const note = r.delayed ? `<div class="note">⚠ was ${r.std}</div>` : '';
+  const fr = filterReason ? `<div class="filter-reason">${filterReason}</div>` : '';
+  return `<div class="${cls}">
+    ${pill(r.op)}
+    <div><div class="dest">${r.dest||'—'}${hi?' ★':''}</div>${note}${fr}</div>
+    <div class="dep-time">${r.displayTime||'--:--'}</div>
+    <div class="dep-mins ${l.cls}">${l.text}</div>
+    ${platTag(r.plat)}
+  </div>`;
+}
+
+function render(data){
+  const services = data.services || [];
+
+  // ── classify every service ────────────────────────────────────────
+  const all = services.map(svc => {
+    const isCancelled = svc.etd === 'Cancelled';
+    const isDelayed = svc.etd && svc.etd !== 'On time' && svc.etd !== 'Cancelled'
+                   && svc.etd !== svc.std && /^\d{2}:\d{2}$/.test(svc.etd);
+    const displayTime = (svc.etd && /^\d{2}:\d{2}$/.test(svc.etd)) ? svc.etd : (svc.std || '--:--');
+    const mins = minsFromNow(displayTime);
+    const op = ATOC_MAP[(svc.operatorCode || '').toUpperCase()] || '';
+    const plat = svc.platform || null;
+
+    let filterReason = null;
+    if(isCancelled) filterReason = 'Cancelled';
+    else if(mins === null) filterReason = 'Could not parse time';
+    else if(mins < -2) filterReason = `Departed ${-mins} min ago (mins=${mins})`;
+    else if(mins > 30) filterReason = `Beyond 30-min window (${mins} min)`;
+
+    return {
+      std: svc.std, etd: svc.etd, displayTime, mins,
+      dest: svc.destination, op, plat,
+      cancelled: isCancelled, delayed: isDelayed,
+      callingPoints: svc.callingPoints || [],
+      serviceId: svc.serviceId,
+      filterReason,
+    };
+  });
+
+  const shown = all.filter(r => !r.filterReason);
+  const filtered = all.filter(r => r.filterReason);
+
+  // ── stats ─────────────────────────────────────────────────────────
+  const tba = shown.filter(r => !r.plat).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><span class="val">${services.length}</span><span class="lbl">Total from API</span></div>
+    <div class="stat"><span class="val">${shown.length}</span><span class="lbl">Shown in app</span></div>
+    <div class="stat"><span class="val">${filtered.length}</span><span class="lbl">Filtered out</span></div>
+    <div class="stat"><span class="val">${tba}</span><span class="lbl">Platform TBA</span></div>
+  `;
+
+  // ── group shown services ──────────────────────────────────────────
+  const byPlat = {};
+  shown.forEach(r => {
+    const p = r.plat || 'TBA';
+    if(!byPlat[p]) byPlat[p] = [];
+    byPlat[p].push(r);
+  });
+
+  // dynamic platform 17 routing
+  Object.entries(DYNAMIC_PLAT).forEach(([plat, opMap]) => {
+    (byPlat[plat] || []).forEach(row => {
+      const label = opMap[row.op] || 'Other';
+      if(!byPlat['_dyn_'+label]) byPlat['_dyn_'+label] = [];
+      byPlat['_dyn_'+label].push({...row, plat});
+    });
+    delete byPlat[plat];
+  });
+
+  let html = '';
+
+  // grouped cards
+  html += `<h2>Grouped view (app renders this)</h2>`;
+  let anyGroup = false;
+  GROUPS.forEach(grp => {
+    const rows = [];
+    grp.plats.forEach(p => { if(byPlat[p]){ rows.push(...byPlat[p]); delete byPlat[p]; } });
+    const dk = '_dyn_'+grp.label;
+    if(byPlat[dk]){ rows.push(...byPlat[dk]); delete byPlat[dk]; }
+    if(!rows.length) return;
+    anyGroup = true;
+    rows.sort((a,b)=>a.mins-b.mins);
+    const chips = grp.plats.length
+      ? grp.plats.map(p=>`<span class="chip">Plat ${p}</span>`).join('')
+      : [...new Set(rows.map(r=>r.plat).filter(Boolean))].map(p=>`<span class="chip">Plat ${p}</span>`).join('');
+    html += `<div class="card">
+      <div class="card-head">
+        <div><div class="card-title">${grp.label}</div><div class="card-chips">${chips}</div></div>
+      </div>
+      ${rows.map(r=>depRowHtml(r,null)).join('')}
+    </div>`;
+  });
+
+  // remaining (ungrouped) — including TBA
+  const remaining = Object.keys(byPlat).filter(p=>!p.startsWith('_'));
+  remaining.sort((a,b)=>{
+    if(a==='TBA') return 1; if(b==='TBA') return -1;
+    const ai=PLAT_FIRST.indexOf(a), bi=PLAT_FIRST.indexOf(b);
+    if(ai>=0&&bi<0) return -1; if(bi>=0&&ai<0) return 1;
+    if(ai>=0&&bi>=0) return ai-bi;
+    const na=parseInt(a),nb=parseInt(b);
+    if(isNaN(na)&&isNaN(nb)) return a.localeCompare(b);
+    if(isNaN(na)) return 1; if(isNaN(nb)) return -1;
+    return na-nb;
+  }).forEach(plat => {
+    const rows = byPlat[plat].sort((a,b)=>a.mins-b.mins);
+    anyGroup = true;
+    html += `<div class="card">
+      <div class="card-head">
+        <div><div class="card-title">${plat==='TBA'?'Platform TBA (unassigned)':'Platform '+plat}</div>
+        <div class="card-chips"><span class="chip">Plat ${plat}</span></div></div>
+      </div>
+      ${rows.map(r=>depRowHtml(r,null)).join('')}
+    </div>`;
+  });
+
+  if(!anyGroup) html += `<div class="empty-row">No departures in the next 30 minutes</div>`;
+
+  // filtered-out services
+  if(showFiltered && filtered.length){
+    html += `<h2>Filtered out (not shown in app)</h2>`;
+    html += `<div class="card">${filtered.map(r=>depRowHtml(r,r.filterReason)).join('')}</div>`;
+  }
+
+  document.getElementById('output').innerHTML = html;
+}
+
+async function load(){
+  document.getElementById('refreshBtn').textContent = '↻ Loading…';
+  document.getElementById('output').innerHTML = '<div class="empty-row">Loading…</div>';
+  try {
+    const res = await fetch('/api/trains?crs=CLJ&rows=50');
+    rawData = await res.json();
+    document.getElementById('rawData').textContent = JSON.stringify(rawData, null, 2);
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB');
+    render(rawData);
+  } catch(e) {
+    document.getElementById('output').innerHTML = `<div class="empty-row" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+  document.getElementById('refreshBtn').textContent = '↻ Refresh';
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
