@@ -402,7 +402,7 @@ function minsFromNow(s){
   if(!s) return null;
   const now=new Date(); let t;
   if(s.includes('T')){ t=new Date(s); }
-  else{ const[h,m]=s.split(':').map(Number); t=new Date(); t.setHours(h,m,0,0); if(t<now) t.setDate(t.getDate()+1); }
+  else{ const[h,m]=s.split(':').map(Number); t=new Date(); t.setHours(h,m,0,0); if(t<now&&(now-t)>4*3600000) t.setDate(t.getDate()+1); }
   return Math.round((t-now)/60000);
 }
 function fmtTime(s){
