@@ -280,7 +280,7 @@ async function load(){
   document.getElementById('refreshBtn').textContent = '↻ Loading…';
   document.getElementById('output').innerHTML = '<div class="empty-row">Loading…</div>';
   try {
-    const res = await fetch('/api/trains?crs=CLJ&rows=50');
+    const res = await fetch('/api/trains?crs=CLJ&rows=150');
     rawData = await res.json();
     document.getElementById('rawData').textContent = JSON.stringify(rawData, null, 2);
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-GB');

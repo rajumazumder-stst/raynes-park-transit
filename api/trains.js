@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   const crs     = (req.query.crs || 'RAY').toUpperCase().slice(0, 3);
-  const numRows = Math.min(parseInt(req.query.rows || '20'), 50);
+  const numRows = Math.min(parseInt(req.query.rows || '20'), 150);
   const url     = `${LDBWS_BASE}/GetDepBoardWithDetails/${crs}?numRows=${numRows}&timeWindow=30`;
 
   try {

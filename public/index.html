@@ -668,7 +668,7 @@ async function fetchAndRenderNR(loc){
   if(!el) return;
   el.innerHTML=loadingHTML();
   try{
-    const res=await fetch(`/api/trains?crs=${loc.nr.crs}&rows=50`,{signal:AbortSignal.timeout(12000)});
+    const res=await fetch(`/api/trains?crs=${loc.nr.crs}&rows=150`,{signal:AbortSignal.timeout(12000)});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
     if(data.error) throw new Error(data.error);
