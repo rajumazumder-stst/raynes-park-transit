@@ -410,8 +410,25 @@ function fmtTime(s){
   if(s.includes('T')) return new Date(s).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'});
   return s.slice(0,5);
 }
+function fmtDateTime(s){
+  if(!s) return null;
+  return new Date(s).toLocaleString('en-GB',{timeZone:'Europe/London',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
 function loadingHTML(){ return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>'; }
 function errorHTML(msg){ return `<div class="state-row" style="color:var(--accent-red)">\u26a0 ${msg}</div>`; }
+// TfL flags temporarily closed bus stops as DisruptedPoint records with type 'Closure'.
+// Returns the active closure (latest reopen date) or null. Only meaningful when a stop has no arrivals.
+async function fetchBusClosure(naptan){
+  try{
+    const res=await fetch(`/api/tfl?path=StopPoint/${naptan}/Disruption`,{signal:AbortSignal.timeout(8000)});
+    if(!res.ok) return null;
+    const data=await res.json();
+    if(!Array.isArray(data)) return null;
+    const closures=data.filter(d=>d.type==='Closure');
+    if(!closures.length) return null;
+    return closures.sort((a,b)=>new Date(b.toDate||0)-new Date(a.toDate||0))[0];
+  }catch(e){ return null; }
+}
 function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
 function getLetter(stop){ return stop.letter!==undefined ? stop.letter : stop.key.split('_').pop(); }
 
@@ -611,7 +628,15 @@ async function fetchBusStop(key){
     const rows=data.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6)
       .map(d=>({ route:d.lineName, dest:d.destinationName||d.towards||'\u2014',
         mins:Math.round(d.timeToStation/60), time:fmtTime(d.expectedArrival), note:null, plat:null }));
-    el.innerHTML=rows.length?rows.map(r=>depRow(r,'bus')).join(''):'<div class="state-row">No upcoming departures</div>';
+    if(rows.length){ el.innerHTML=rows.map(r=>depRow(r,'bus')).join(''); return; }
+    // No departures — check whether the stop is flagged closed before showing the neutral empty state.
+    const closure=await fetchBusClosure(stop.naptan);
+    if(closure){
+      const until=fmtDateTime(closure.toDate);
+      el.innerHTML=`<div class="state-row" style="color:var(--accent-red)">⚠ Stop closed${until?` until ${until}`:''}</div>`;
+    }else{
+      el.innerHTML='<div class="state-row">No upcoming departures</div>';
+    }
   }catch(e){ el.innerHTML=errorHTML('Could not load'); }
 }
 

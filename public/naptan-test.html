@@ -149,25 +149,26 @@ const fmtDate = iso => {
 };
 const minsClass = m => m <= 3 ? 'due' : m <= 8 ? 'soon' : 'norm';
 
-async function fetchArrivals(naptan) {
-  const res = await fetch(`/api/tfl?path=StopPoint/${encodeURIComponent(naptan)}/Arrivals`, { signal: AbortSignal.timeout(12000) });
+async function tflFetch(path) {
+  const res = await fetch(`/api/tfl?path=StopPoint/${path}`, { signal: AbortSignal.timeout(12000) });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+async function fetchArrivals(naptan) {
+  const data = await tflFetch(`${naptan}/Arrivals`);
   if (!Array.isArray(data)) throw new Error('Unexpected response (not an arrivals array)');
   return data;
 }
 
 // Returns the active Closure disruption for a stop, or null. TfL flags closed
-// bus stops as DisruptedPoint records with type === 'Closure'.
+// bus stops as DisruptedPoint records with type === 'Closure'; most-recent reopen date wins.
 async function fetchClosure(naptan) {
-  const res = await fetch(`/api/tfl?path=StopPoint/${encodeURIComponent(naptan)}/Disruption`, { signal: AbortSignal.timeout(12000) });
-  const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+  const data = await tflFetch(`${naptan}/Disruption`);
   if (!Array.isArray(data)) return null;
   const closures = data.filter(d => d.type === 'Closure');
-  if (!closures.length) return null;
-  // most-recent reopen date wins
-  return closures.sort((a, b) => new Date(b.toDate || 0) - new Date(a.toDate || 0))[0];
+  return closures.length ? closures.sort((a, b) => new Date(b.toDate || 0) - new Date(a.toDate || 0))[0] : null;
 }
 
 async function lookup(rawNap) {

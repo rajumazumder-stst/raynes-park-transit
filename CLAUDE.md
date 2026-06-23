@@ -14,7 +14,8 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 public/index.html          Single-file PWA (all HTML + CSS + JS)
 public/clj-test.html       Diagnostic page — CLJ departures with grouped view, filter debug, and stats
 public/highlight-test.html Test page — verifies filterCrs approach and RAY/WBO highlight detection
-api/tfl.js                 Vercel serverless function — TfL arrivals proxy (buses, tube, tram)
+public/naptan-test.html    Test page — lists all bus-stop NaPTANs; lookup box + "Test All" sweep showing stop details, closures, and arrivals within 30 min
+api/tfl.js                 Vercel serverless function — TfL proxy: arrivals (buses, tube, tram) + stop-point disruptions
 api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepartureBoard)
 vercel.json                Routing config (do not modify)
 ```
@@ -29,7 +30,7 @@ vercel.json                Routing config (do not modify)
 - NR REST base: `https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120`
 - NR auth: `x-apikey` request header (raildata.org.uk consumer key)
 - `trains.js` called as `/api/trains?crs=RAY&rows=150` — returns up to 149 services; also supports `filterCrs=RAY` to return only services calling at that station
-- `tfl.js` called as `/api/tfl?path=StopPoint/{naptan}/Arrivals` or `/api/tfl?path=Line/{line}/Arrivals/{stopId}`
+- `tfl.js` allows three path shapes: `StopPoint/{naptan}/Arrivals`, `StopPoint/{naptan}/Disruption`, and `Line/{line}/Arrivals/{stopId}` (anything else → 400)
 
 ---
 
@@ -239,7 +240,8 @@ const S = {
 | `renderTubeData(loc, tubeData)` | Handles `mergeLines` (Blackfriars), Wimbledon combined, standard |
 | `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals via `fetchLineArrivals`, writes to `#tram-{id}` only |
 | `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
-| `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only |
+| `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only; if no arrivals, checks closure via `fetchBusClosure` |
+| `fetchBusClosure(naptan)` | Fetches `StopPoint/{naptan}/Disruption`; returns the active `type:"Closure"` record (latest reopen date) or `null` |
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
 | `buildCard(label, chips, rows, type, sub)` | Shared card HTML builder for NR/tube/tram |
 | `depRow(r, type)` | Single departure row HTML |
@@ -260,6 +262,7 @@ const S = {
 - **Clapham Junction platform 17** — SN services → Brighton Main Line, LO services → London Overground (via `dynamicPlatforms`)
 - **Merton Park tram (South Wimbledon)** — fetched via `Line/tram/Arrivals`, filtered to `direction === 'inbound'` via `inboundOnly: true`
 - **Bus stops with no letter** — `letter: ''` renders an empty gradient badge
+- **Closed bus stops** — when a stop returns no arrivals, `fetchBusStop` checks `StopPoint/{naptan}/Disruption`. A `type:"Closure"` record renders a red "Stop closed until {date}" notice; stops with no arrivals and no closure record keep the neutral "No upcoming departures" state. (TfL only flags temporary hooded closures this way — a stop quietly dropped from live predictions without a `Closure` record, as seen at some Norbiton stops, cannot be detected via the API.)
 
 ---
 
