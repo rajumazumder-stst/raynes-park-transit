@@ -9,43 +9,47 @@
   h1 { color: #2a7fff; font-size: 1.1rem; margin-bottom: 16px; }
   .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
   label { color: #888; font-size: 0.85rem; }
-  input, select { background: #0e1828; border: 1px solid #1e3050; color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
+  input { background: #0e1828; border: 1px solid #1e3050; color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
   button { background: #2a7fff; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 0.9rem; }
   button:disabled { opacity: 0.5; cursor: default; }
   button.secondary { background: #1e3050; }
   #status { font-size: 0.8rem; color: #888; margin-bottom: 12px; min-height: 1.2em; }
+  #stats { font-size: 0.8rem; color: #555; margin-bottom: 12px; display: none; }
+  #stats span { margin-right: 16px; }
+  #stats .hi { color: #00e676; }
   table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
   th { background: #132035; color: #2a7fff; padding: 6px 10px; text-align: left; border-bottom: 1px solid #1e3050; position: sticky; top: 0; }
-  td { padding: 5px 10px; border-bottom: 1px solid #0e1828; vertical-align: top; }
+  td { padding: 5px 10px; border-bottom: 1px solid #0e1828; vertical-align: middle; }
   tr.highlight { background: #0a2010; }
   tr.highlight td:first-child { border-left: 3px solid #00e676; }
-  .badge { display: inline-block; background: #00e676; color: #060c18; border-radius: 3px; padding: 1px 5px; font-size: 0.75rem; font-weight: bold; margin-right: 4px; }
-  .stops { color: #555; font-size: 0.75rem; line-height: 1.5; }
-  .stops .match { color: #00e676; font-weight: bold; }
+  .badge { display: inline-block; border-radius: 3px; padding: 1px 5px; font-size: 0.75rem; font-weight: bold; margin-right: 3px; }
+  .badge-ray { background: #00e676; color: #060c18; }
+  .badge-wbo { background: #00c9a7; color: #060c18; }
   .err { color: #ff4d6a; }
   .pending { color: #888; font-style: italic; }
-  .section { margin-bottom: 24px; }
-  .raw-toggle { color: #2a7fff; cursor: pointer; font-size: 0.75rem; text-decoration: underline; }
-  pre { background: #0e1828; border: 1px solid #1e3050; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 0.75rem; color: #a6e3a1; display: none; }
 </style>
 </head>
 <body>
-<h1>Highlight Test — Raynes Park / Wimbledon Chase</h1>
+<h1>Highlight Test — Raynes Park / Wimbledon Chase (filterCrs approach)</h1>
 
-<div class="section controls">
+<div class="controls">
   <label>Station CRS:</label>
   <input id="crs" type="text" value="WAT" maxlength="3" style="width:60px; text-transform:uppercase;">
   <button id="fetchBtn" onclick="fetchBoard()">Fetch Departures</button>
-  <button id="highlightBtn" class="secondary" onclick="fetchHighlights()" disabled>Fetch Calling Points &amp; Highlight</button>
-  <button class="secondary" onclick="clearHighlights()">Clear Highlights</button>
+  <button id="highlightBtn" class="secondary" onclick="fetchHighlights()" disabled>Highlight via filterCrs</button>
+  <button class="secondary" onclick="clearHighlights()">Clear</button>
 </div>
 
 <div id="status">Enter a CRS code and click Fetch Departures.</div>
+<div id="stats">
+  <span>RAY filter: <span id="rayCount">—</span></span>
+  <span>WBO filter: <span id="wboCount">—</span></span>
+  <span class="hi">Highlighted: <span id="matchCount">—</span> of <span id="totalCount">—</span></span>
+</div>
 
 <div id="output"></div>
 
 <script>
-const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
 let services = [];
 
 function setStatus(msg, isErr) {
@@ -55,12 +59,13 @@ function setStatus(msg, isErr) {
 }
 
 async function fetchBoard() {
-  const crs = document.getElementById('crs').value.trim().toUpperCase().slice(0,3);
+  const crs = document.getElementById('crs').value.trim().toUpperCase().slice(0, 3);
   if (!crs) { setStatus('Enter a CRS code.', true); return; }
 
   setStatus(`Fetching departures from ${crs}…`);
   document.getElementById('fetchBtn').disabled = true;
   document.getElementById('highlightBtn').disabled = true;
+  document.getElementById('stats').style.display = 'none';
   services = [];
   document.getElementById('output').innerHTML = '';
 
@@ -69,11 +74,11 @@ async function fetchBoard() {
     const data = await res.json();
     if (data.error) { setStatus(`API error: ${data.error}`, true); return; }
 
-    services = data.services || [];
-    setStatus(`${services.length} service(s) returned from ${crs}. Click "Fetch Calling Points & Highlight" to identify RAY/WBO services.`);
+    services = (data.services || []).map(s => ({ ...s, _matchRay: false, _matchWbo: false, _matchDone: false }));
+    setStatus(`${services.length} service(s) from ${crs}. Click "Highlight via filterCrs" to identify RAY/WBO services.`);
     renderTable(false);
     document.getElementById('highlightBtn').disabled = false;
-  } catch(e) {
+  } catch (e) {
     setStatus(`Fetch failed: ${e.message}`, true);
   } finally {
     document.getElementById('fetchBtn').disabled = false;
@@ -82,89 +87,77 @@ async function fetchBoard() {
 
 async function fetchHighlights() {
   if (!services.length) return;
-  setStatus(`Fetching calling points for ${services.length} service(s)…`);
+  const crs = document.getElementById('crs').value.trim().toUpperCase().slice(0, 3);
+
+  setStatus(`Fetching RAY and WBO filtered boards from ${crs}…`);
   document.getElementById('highlightBtn').disabled = true;
 
-  // Fetch calling points in parallel, attach to service objects
-  await Promise.all(services.map(async svc => {
-    if (svc._cpDone) return;
-    try {
-      const res = await fetch(`/api/calling-points?serviceId=${encodeURIComponent(svc.serviceId)}`, {signal: AbortSignal.timeout(10000)});
-      if (!res.ok) {
-        const err = await res.json().catch(()=>({error:'non-JSON response'}));
-        svc._cpError = `HTTP ${res.status}: ${err.error||'unknown'}${err.detail ? ' — ' + err.detail : ''}`;
-        svc._cpRaw = null;
-        svc.callingPoints = [];
-      } else {
-        const cp = await res.json();
-        svc.callingPoints = cp.callingPoints || [];
-        svc._cpRaw = cp._raw;
-        svc._cpError = null;
-      }
-    } catch(e) {
-      svc._cpError = e.message;
-      svc.callingPoints = [];
-    }
-    svc._cpDone = true;
-  }));
+  const [rayResult, wboResult] = await Promise.allSettled([
+    fetch(`/api/trains?crs=${crs}&filterCrs=RAY&rows=150`).then(r => r.json()),
+    fetch(`/api/trains?crs=${crs}&filterCrs=WBO&rows=150`).then(r => r.json()),
+  ]);
 
-  const matchCount = services.filter(s => isHighlight(s)).length;
-  setStatus(`Done. ${matchCount} of ${services.length} service(s) call at Raynes Park or Wimbledon Chase.`);
+  const rayServices = rayResult.status === 'fulfilled' && !rayResult.value.error
+    ? (rayResult.value.services || []) : [];
+  const wboServices = wboResult.status === 'fulfilled' && !wboResult.value.error
+    ? (wboResult.value.services || []) : [];
+
+  const rayIds = new Set(rayServices.map(s => s.serviceId));
+  const wboIds = new Set(wboServices.map(s => s.serviceId));
+
+  services.forEach(svc => {
+    svc._matchRay  = rayIds.has(svc.serviceId);
+    svc._matchWbo  = wboIds.has(svc.serviceId);
+    svc._matchDone = true;
+  });
+
+  const matchCount = services.filter(s => s._matchRay || s._matchWbo).length;
+
+  const rayErr = rayResult.status === 'rejected' || rayResult.value?.error;
+  const wboErr = wboResult.status === 'rejected' || wboResult.value?.error;
+
+  document.getElementById('rayCount').textContent = rayErr ? `error: ${rayResult.value?.error || rayResult.reason}` : rayServices.length;
+  document.getElementById('wboCount').textContent = wboErr ? `error: ${wboResult.value?.error || wboResult.reason}` : wboServices.length;
+  document.getElementById('matchCount').textContent = matchCount;
+  document.getElementById('totalCount').textContent = services.length;
+  document.getElementById('stats').style.display = 'block';
+
+  setStatus(matchCount > 0
+    ? `${matchCount} service(s) call at Raynes Park or Wimbledon Chase.`
+    : `No matching services found — filterCrs may only match final-destination trains.`);
+
   renderTable(true);
   document.getElementById('highlightBtn').disabled = false;
 }
 
-function isHighlight(svc) {
-  if (!svc.callingPoints || !svc.callingPoints.length) return false;
-  return svc.callingPoints.some(cp =>
-    HIGHLIGHT_STOPS.some(h => cp.toLowerCase().includes(h.toLowerCase()))
-  );
-}
-
 function clearHighlights() {
-  services.forEach(s => { s.callingPoints = null; s._cpDone = false; s._cpError = null; s._cpRaw = null; });
+  services.forEach(s => { s._matchRay = false; s._matchWbo = false; s._matchDone = false; });
+  document.getElementById('stats').style.display = 'none';
   renderTable(false);
-  setStatus('Highlights cleared. Re-click "Fetch Calling Points & Highlight" to re-check.');
+  setStatus('Highlights cleared.');
 }
 
-function renderTable(showCp) {
-  const rows = services.map((svc, i) => {
-    const hi = showCp && isHighlight(svc);
-    const cpHtml = !showCp ? '' : svc._cpError
-      ? `<div class="err">Error: ${svc._cpError}</div>`
-      : !svc._cpDone
-        ? `<div class="pending">not fetched</div>`
-        : svc.callingPoints.length === 0
-          ? `<div class="err">No calling points returned</div>`
-          : `<div class="stops">${svc.callingPoints.map(cp => {
-              const match = HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase()));
-              return match ? `<span class="match">${cp}</span>` : cp;
-            }).join(' → ')}</div>
-            <span class="raw-toggle" onclick="toggleRaw('raw-${i}')">raw JSON</span>
-            <pre id="raw-${i}">${JSON.stringify(svc._cpRaw,null,2)}</pre>`;
-
-    const dest = svc.destination || '—';
-    const destMatch = HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase()));
+function renderTable(showHighlights) {
+  const rows = services.map(svc => {
+    const hi = showHighlights && (svc._matchRay || svc._matchWbo);
+    const badges = !showHighlights ? '' :
+      (svc._matchRay ? '<span class="badge badge-ray">RAY</span>' : '') +
+      (svc._matchWbo ? '<span class="badge badge-wbo">WBO</span>' : '');
 
     return `<tr class="${hi ? 'highlight' : ''}">
-      <td>${hi ? '<span class="badge">★</span>' : ''}${svc.std||'—'} / ${svc.etd||'—'}</td>
-      <td>${svc.platform||'?'}</td>
-      <td>${dest}${destMatch ? ' <span class="badge">term</span>' : ''}</td>
-      <td style="max-width:360px">${cpHtml || (showCp ? '' : '<span style="color:#555">—</span>')}</td>
-      <td style="color:#555;font-size:0.7rem;word-break:break-all;max-width:180px">${svc.serviceId||'—'}</td>
+      <td>${svc.std || '—'} / ${svc.etd || '—'}</td>
+      <td>${svc.platform || '?'}</td>
+      <td>${svc.destination || '—'}</td>
+      <td>${badges || '<span style="color:#555">—</span>'}</td>
+      <td style="color:#555;font-size:0.7rem;word-break:break-all;max-width:180px">${svc.serviceId || '—'}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('output').innerHTML = `
     <table>
-      <thead><tr><th>Std / Etd</th><th>Plat</th><th>Destination</th><th>Calling Points</th><th>Service ID</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="4" style="color:#555">No services</td></tr>'}</tbody>
+      <thead><tr><th>Std / Etd</th><th>Plat</th><th>Destination</th><th>Match</th><th>Service ID</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5" style="color:#555">No services</td></tr>'}</tbody>
     </table>`;
-}
-
-function toggleRaw(id) {
-  const el = document.getElementById(id);
-  if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }
 </script>
 </body>

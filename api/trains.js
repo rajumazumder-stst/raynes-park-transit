@@ -10,9 +10,11 @@ export default async function handler(req, res) {
     return;
   }
 
-  const crs     = (req.query.crs || 'RAY').toUpperCase().slice(0, 3);
-  const numRows = Math.min(parseInt(req.query.rows || '20'), 150);
-  const url     = `${LDBWS_BASE}/GetDepartureBoard/${crs}?numRows=${numRows}&timeWindow=30`;
+  const crs        = (req.query.crs || 'RAY').toUpperCase().slice(0, 3);
+  const numRows    = Math.min(parseInt(req.query.rows || '20'), 150);
+  const filterCrs  = req.query.filterCrs ? req.query.filterCrs.toUpperCase().slice(0, 3) : null;
+  const filterParam = filterCrs ? `&filterCrs=${filterCrs}&filterType=to` : '';
+  const url        = `${LDBWS_BASE}/GetDepartureBoard/${crs}?numRows=${numRows}&timeWindow=30${filterParam}`;
 
   try {
     const apiRes = await fetch(url, {
