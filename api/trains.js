@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   const crs     = (req.query.crs || 'RAY').toUpperCase().slice(0, 3);
   const numRows = Math.min(parseInt(req.query.rows || '20'), 150);
-  const url     = `${LDBWS_BASE}/GetDepBoardWithDetails/${crs}?numRows=${numRows}&timeWindow=30`;
+  const url     = `${LDBWS_BASE}/GetDepartureBoard/${crs}?numRows=${numRows}&timeWindow=30`;
 
   try {
     const apiRes = await fetch(url, {
@@ -35,7 +35,6 @@ export default async function handler(req, res) {
       destination:   svc.destination?.[0]?.locationName || '—',
       operatorCode:  svc.operatorCode,
       serviceId:     svc.serviceID,
-      callingPoints: (svc.subsequentCallingPoints?.[0]?.callingPoint || []).map(p => p.locationName),
     }));
 
     const messages = (data.nrccMessages || []).map(m => m.Value || '').filter(Boolean);

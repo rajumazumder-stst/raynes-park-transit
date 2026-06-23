@@ -13,7 +13,7 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 ```
 public/index.html          Single-file PWA (all HTML + CSS + JS)
 api/tfl.js                 Vercel serverless function — TfL arrivals proxy (buses, tube, tram)
-api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepBoardWithDetails)
+api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepartureBoard)
 api/calling-points.js      Vercel serverless function — NR calling points (GetServiceDetails)
 vercel.json                Routing config (do not modify)
 ```
@@ -27,8 +27,8 @@ vercel.json                Routing config (do not modify)
 
 - NR REST base: `https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120`
 - NR auth: `x-apikey` request header (raildata.org.uk consumer key)
-- `trains.js` called as `/api/trains?crs=RAY&rows=50` — returns services with `callingPoints` inline
-- `calling-points.js` called as `/api/calling-points?serviceId=...` — fallback only; calling points now included in `trains.js` response
+- `trains.js` called as `/api/trains?crs=RAY&rows=150` — returns up to 149 services (no inline calling points)
+- `calling-points.js` called as `/api/calling-points?serviceId=...` — fetched on demand when the highlight button is activated
 - `tfl.js` called as `/api/tfl?path=StopPoint/{naptan}/Arrivals` or `/api/tfl?path=Line/{line}/Arrivals/{stopId}`
 
 ---
@@ -58,7 +58,7 @@ National Rail → Tube → Tram → Buses (only sections present in the location
 
 ### Filter bar (NR sections)
 
-- **"To Raynes Park / Wimbledon Chase" filter** — shown on all NR locations where `nr.filter: true`. Fetches calling points on demand via `/api/calling-points`.
+- **"To Raynes Park / Wimbledon Chase" highlight button** — shown on all NR locations except Raynes Park (RAY) and Wimbledon Chase (WBO). When toggled on, fetches calling points on demand via `/api/calling-points` for every visible service, then re-renders with a green ★ badge on matching rows. All services remain visible (no filtering).
 - **Grouped / By Platform segmented control** — shown on all NR locations with `nr.groups` defined.
 
 Both rendered inside `.filter-bar` above `#nr-{id}`.
@@ -80,7 +80,6 @@ Single unified array. Each entry:
 
   nr: {                          // omit if no NR station
     crs,                         // 3-letter CRS code
-    filter,                      // bool — show "To Raynes Park" filter button
     groups: [{ label, plats[] }],// grouped view card definitions
     dynamicGroups,               // bool — enables destination-based routing (Vauxhall)
     dynamicPlatforms,            // { platNum: { opCode: groupLabel } } — operator routing (CLJ plat 17)
@@ -155,7 +154,14 @@ const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
 
 ### Highlight logic
 
-Services calling at Raynes Park or Wimbledon Chase are highlighted with a green ★ badge. Uses `callingPoints` array if populated, otherwise falls back to destination name match.
+The "To Raynes Park / Wimbledon Chase" button (shown on all NR locations except RAY and WBO) toggles highlight mode. When active:
+
+1. Calling points are fetched on demand for every cached service via `/api/calling-points` and attached to the service object in `S.nrCache`.
+2. `renderNRData` pre-computes `row.isHighlight` using `isHighlight(dest, callingPoints)` — checks `callingPoints` array first, falls back to destination name match.
+3. `depRow` reads `r.isHighlight` directly to apply the green ★ badge and highlighted row style.
+4. On auto-refresh, if `S.highlightActive[id]` is true, calling points are re-fetched for the new service set before rendering.
+
+All services remain visible regardless of highlight state — no rows are filtered out.
 
 ```js
 const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
@@ -207,10 +213,10 @@ Solid colour blocks, no text:
 
 ```js
 const S = {
-  currentIdx:   0,     // index into LOCATIONS
-  filterActive: {},    // locId → bool
-  viewMode:     {},    // locId → 'grouped' | 'platform'
-  nrCache:      {},    // locId → raw NR API response (services have callingPoints attached)
+  currentIdx:     0,     // index into LOCATIONS
+  highlightActive: {},   // locId → bool (highlight button toggled on)
+  viewMode:       {},    // locId → 'grouped' | 'platform'
+  nrCache:        {},    // locId → raw NR API response (callingPoints attached per-service after highlight fetch)
 };
 ```
 
@@ -240,8 +246,8 @@ const S = {
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
 | `buildCard(label, chips, rows, type, id, sub)` | Shared card HTML builder for NR/tube/tram |
 | `depRow(r, type)` | Single departure row HTML |
-| `renderRows(rows, type, id)` | Applies filter, maps to `depRow` |
-| `toggleFilter(id)` | Toggles filter, fetches calling points on demand, re-renders NR section |
+| `renderRows(rows, type, id)` | Maps rows to `depRow` HTML |
+| `toggleHighlight(id)` | Toggles highlight button, fetches calling points on demand, re-renders NR section |
 | `setViewMode(id, mode)` | Switches grouped/platform, re-renders NR from cache |
 | `toggleSubgroup(header)` | Collapses/expands bus subgroup |
 | `classifyVXH(row)` | Vauxhall dynamic group classifier |
