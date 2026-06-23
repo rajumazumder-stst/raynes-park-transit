@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NAPTAN Test — Bus Stop Arrivals</title>
+<style>
+  body { font-family: monospace; background: #060c18; color: #cdd6f4; margin: 0; padding: 16px; }
+  h1 { color: #2a7fff; font-size: 1.1rem; margin-bottom: 4px; }
+  h2 { color: #00c9a7; font-size: 0.95rem; margin: 20px 0 8px; border-bottom: 1px solid #1e3050; padding-bottom: 4px; }
+  .sub { color: #888; font-size: 0.8rem; margin-bottom: 16px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  label { color: #888; font-size: 0.85rem; }
+  input { background: #0e1828; border: 1px solid #1e3050; color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
+  button { background: #2a7fff; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 0.9rem; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: #1e3050; }
+  button.mini { background: #1e3050; padding: 2px 8px; font-size: 0.72rem; }
+  #status { font-size: 0.8rem; color: #888; margin: 8px 0; min-height: 1.2em; }
+  .err { color: #ff4d6a; }
+
+  /* NAPTAN catalogue */
+  .loc-block { margin-bottom: 14px; }
+  .loc-title { color: #ffb340; font-size: 0.85rem; margin-bottom: 4px; }
+  table.cat { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+  table.cat th { background: #132035; color: #2a7fff; padding: 4px 8px; text-align: left; border-bottom: 1px solid #1e3050; }
+  table.cat td { padding: 4px 8px; border-bottom: 1px solid #0e1828; vertical-align: middle; }
+  table.cat tr:hover td { background: #0e1828; }
+  .key-badge { display: inline-block; background: #2a7fff; color: #fff; border-radius: 3px; padding: 1px 6px; font-size: 0.7rem; font-weight: bold; }
+  .nap { color: #00c9a7; cursor: pointer; }
+  .nap:hover { text-decoration: underline; }
+  .routes { color: #666; font-size: 0.72rem; }
+
+  /* Result panel */
+  #result { margin-top: 16px; }
+  .detail-card { background: #0e1828; border: 1px solid #1e3050; border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+  .detail-card .name { color: #2a7fff; font-size: 1rem; font-weight: bold; margin-bottom: 6px; }
+  .detail-grid { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; font-size: 0.82rem; }
+  .detail-grid .lbl { color: #888; }
+  .pill { display: inline-block; background: #1e3050; border-radius: 3px; padding: 1px 6px; font-size: 0.72rem; margin: 1px 2px 1px 0; }
+
+  table.arr { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+  table.arr th { background: #132035; color: #2a7fff; padding: 6px 10px; text-align: left; border-bottom: 1px solid #1e3050; }
+  table.arr td { padding: 5px 10px; border-bottom: 1px solid #0e1828; vertical-align: middle; }
+  .line-badge { display: inline-block; background: #ffb340; color: #060c18; border-radius: 3px; padding: 1px 7px; font-size: 0.75rem; font-weight: bold; }
+  .mins.due  { color: #ff4d6a; font-weight: bold; }
+  .mins.soon { color: #ffb340; font-weight: bold; }
+  .mins.norm { color: #00c9a7; }
+</style>
+</head>
+<body>
+<h1>NAPTAN Test — Bus Stop Arrivals</h1>
+<div class="sub">Tests every bus-stop NaPTAN in the app against <code>/api/tfl?path=StopPoint/{naptan}/Arrivals</code>. Shows stop details and departures within the next 30 minutes. Click any NaPTAN, or enter one below.</div>
+
+<div class="controls">
+  <label>NaPTAN:</label>
+  <input id="napInput" type="text" placeholder="e.g. 490001237G" style="width:160px;">
+  <button id="fetchBtn" onclick="lookup(document.getElementById('napInput').value)">Lookup</button>
+  <button class="secondary" onclick="testAll()">Test All NaPTANs</button>
+</div>
+
+<div id="status">Click a NaPTAN in the catalogue or enter one above.</div>
+
+<div id="result"></div>
+
+<h2>Current NaPTANs in the app</h2>
+<div id="catalogue"></div>
+
+<script>
+// ── Bus-stop NaPTANs extracted from the LOCATIONS array in index.html ──
+const CATALOGUE = [
+  { loc: 'Raynes Park', stops: [
+    { key:'M',  naptan:'490004647E',  name:'Bushey Road/Grand Drive',          sub:'Bushey Road – eastbound',     routes:'152 · 655 · K5' },
+    { key:'U1', naptan:'490004647W',  name:'Bushey Road/Grand Drive',          sub:'Bushey Road – westbound',     routes:'152 · 655 · K5' },
+    { key:'S',  naptan:'490001237G',  name:'Raynes Park Station',              sub:'Approach Road – westbound',   routes:'152 · 163 · K5' },
+    { key:'P',  naptan:'490001237F',  name:'Raynes Park Station',              sub:'Approach Road – eastbound',   routes:'152 · 163 · K5' },
+    { key:'H',  naptan:'490001237A',  name:'Raynes Park Station',              sub:'Coombe Lane – westbound',     routes:'57 · 131 · 200 · N87' },
+    { key:'B',  naptan:'490001237C',  name:'Raynes Park Station',              sub:'Coombe Lane – eastbound',     routes:'57 · 131 · 200 · N87' },
+    { key:'J',  naptan:'490003963N',  name:'Beverley Way/Goal Sports Centre',  sub:'Beverley Way – northbound',   routes:'265' },
+    { key:'U2', naptan:'490011455S',  name:'Raynes Park High School',          sub:'Beverley Way – southbound',   routes:'152 · 265 · 655 · K5' },
+  ]},
+  { loc: 'Wimbledon Chase', stops: [
+    { key:'WCB_MT', naptan:'490001339A', name:'Wimbledon Chase Station', sub:'Kingston Road – northeastbound',  routes:'152 · 163 · 164 · 655 · K5' },
+    { key:'WCB_MK', naptan:'490004645S', name:'Merton Mansions',         sub:'Martin Way – southeastbound',     routes:'164' },
+    { key:'WCB_MH', naptan:'490001339B', name:'Wimbledon Chase Station', sub:'Kingston Road – southwestbound',  routes:'152 · 163 · 164 · 655 · K5' },
+  ]},
+  { loc: 'New Malden', stops: [
+    { key:'NM_F', naptan:'490010235F', name:'Walton Avenue',                  sub:'Burlington Road – eastbound', routes:'131 · 152 · 265 · N87' },
+    { key:'NM_A', naptan:'490011348E', name:'Queens Road',                    sub:'Burlington Road – eastbound', routes:'131 · 152 · 265 · N87' },
+    { key:'NM_B', naptan:'490011674E', name:'Shannon Corner/Rookwood Avenue', sub:'Burlington Road – eastbound', routes:'131 · 152 · 265 · N87' },
+    { key:'NM_J', naptan:'490015206J', name:'New Malden/Fountain Roundabout', sub:'Malden Road – southbound',    routes:'213 · 265 · 662 · 665 · K1 · K5 · SL7' },
+    { key:'NM_K', naptan:'490015206K', name:'New Malden/Fountain Roundabout', sub:'Malden Road – northbound',    routes:'213 · 265 · 662 · 665 · K1 · K5 · SL7' },
+  ]},
+  { loc: 'Wimbledon', stops: [
+    { key:'WIM_M', naptan:'490006987M', name:'Francis Grove',         sub:'Worple Road – southwestbound',         routes:'57 · 131 · N87' },
+    { key:'WIM_L', naptan:'490015472L', name:'Wimbledon Station',     sub:'Hartfield Road – northbound',          routes:'57 · 93 · 131 · 200 · 219 · N87' },
+    { key:'WIM_F', naptan:'490014731F', name:'Wimbledon Bus Station', sub:'Sir Cyril Black Way – southwestbound', routes:'57 · 131 · N87' },
+    { key:'WIM_D', naptan:'490015472D', name:'Wimbledon Station',     sub:'The Broadway – southeastbound',        routes:'57 · 93 · 131 · 156 · 163 · 164 · 219 · N87' },
+    { key:'WIM_R', naptan:'490014734R', name:'Wimbledon Hill Road',   sub:'Wimbledon Hill Road – northwestbound', routes:'93 · 200 · 492' },
+  ]},
+  { loc: 'South Wimbledon', stops: [
+    { key:'SW_SF', naptan:'490000216C', name:'South Wimbledon Station', sub:'Merton High Street – westbound', routes:'57 · 131 · 152 · 219 · 655 · N155' },
+  ]},
+  { loc: 'Colliers Wood', stops: [
+    { key:'CW_F', naptan:'490009830F', name:'Merton Abbey/Merton High Street', sub:'Merton High Street – westbound', routes:'152 · 655' },
+    { key:'CW_G', naptan:'490009830G', name:'Merton Abbey/Merton High Street', sub:'Merton High Street – westbound', routes:'57 · 131 · 200 · 219 · N155' },
+  ]},
+  { loc: 'Norbiton', stops: [
+    { key:'NOR_NZ', naptan:'4900018701N', name:'Gordon Road',     sub:'London Road – northeastbound', routes:'57 · 85 · 213 · 371' },
+    { key:'NOR_NC', naptan:'490010295E',  name:'Norbiton Church', sub:'London Road – eastbound',      routes:'57 · 85 · 213 · 371 · K2 · K3 · K4 · K5' },
+    { key:'NOR_VH', naptan:'490014039E',  name:'Vicarage House',  sub:'Cambridge Road – eastbound',   routes:'131 · N87' },
+  ]},
+  { loc: 'Kingston', stops: [
+    { key:'KNG_E3', naptan:'490006412E3', name:'Eden Street',               sub:'Eden Street – northbound',    routes:'65 · 71 · 371 · 406 · 418 · 458 · 513 · 671 · 714 · 715 · K1 · K5 · N65' },
+    { key:'KNG_A2', naptan:'490005800A2', name:'Cromwell Road Bus Station', sub:'Cromwell Road – eastbound',   routes:'57 · 71 · 85 · 111 · 131 · 216 · 286 · 406 · 411 · 418 · 458 · 465 · 481 · 513 · K1 · K5' },
+    { key:'KNG_R',  naptan:'490001173R',  name:'Kingston Station',     sub:'Wood Street – westbound',      routes:'111 · 216 · 411' },
+    { key:'KNG_T',  naptan:'490001173T',  name:'Kingston Station',     sub:'Clarence Street – northbound', routes:'65 · 671 · N65 · SL7' },
+    { key:'KNG_N',  naptan:'490003909N',  name:'Kingston/Wood Street', sub:'Wood Street – northbound',     routes:'111 · 216 · 281 · 285 · 411 · 461 · 481 · SL7' },
+  ]},
+  { loc: 'Putney', stops: [
+    { key:'PUT_E',  naptan:'490001231E', name:'Putney Station',                        sub:'Putney High Street – southbound', routes:'14 · 85 · 93' },
+    { key:'PUT_P',  naptan:'490013344P', name:'Putney Pier',                           sub:'Lower Richmond Road – westbound', routes:'22 · 265 · 378 · 485 · N22 · N33 · N72' },
+    { key:'PUT_FE', naptan:'490015157T', name:'Putney Bridge Station/Gonville Street', sub:'Putney Bridge – southwestbound',  routes:'14 · 22 · 39 · 74 · 85 · 93 · 265 · 378 · 424 · 430' },
+  ]},
+];
+
+// flat lookup naptan -> config stop
+const CONFIG_BY_NAP = {};
+CATALOGUE.forEach(b => b.stops.forEach(s => { CONFIG_BY_NAP[s.naptan] = { ...s, loc: b.loc }; }));
+
+function setStatus(msg, isErr) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : '';
+}
+
+const fmtTime = iso => {
+  try { return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }); }
+  catch { return '—'; }
+};
+const minsClass = m => m <= 3 ? 'due' : m <= 8 ? 'soon' : 'norm';
+
+async function fetchArrivals(naptan) {
+  const res = await fetch(`/api/tfl?path=StopPoint/${encodeURIComponent(naptan)}/Arrivals`, { signal: AbortSignal.timeout(12000) });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!Array.isArray(data)) throw new Error('Unexpected response (not an arrivals array)');
+  return data;
+}
+
+async function lookup(rawNap) {
+  const naptan = (rawNap || '').trim();
+  if (!naptan) { setStatus('Enter a NaPTAN.', true); return; }
+
+  setStatus(`Fetching arrivals for ${naptan}…`);
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('result').innerHTML = '';
+  document.getElementById('napInput').value = naptan;
+
+  try {
+    const arrivals = await fetchArrivals(naptan);
+    const within30 = arrivals
+      .map(a => ({ ...a, mins: Math.round((a.timeToStation || 0) / 60) }))
+      .filter(a => a.mins <= 30)
+      .sort((a, b) => a.timeToStation - b.timeToStation);
+
+    renderResult(naptan, arrivals, within30);
+    setStatus(`${arrivals.length} total arrival(s), ${within30.length} within 30 min for ${naptan}.`);
+  } catch (e) {
+    document.getElementById('result').innerHTML = `<div class="detail-card err">Failed for ${naptan}: ${e.message}</div>`;
+    setStatus(`Lookup failed: ${e.message}`, true);
+  } finally {
+    document.getElementById('fetchBtn').disabled = false;
+  }
+}
+
+function renderResult(naptan, arrivals, within30) {
+  const cfg = CONFIG_BY_NAP[naptan];
+  const first = arrivals[0] || {};
+  const stationName = first.stationName || (cfg ? cfg.name : '—');
+  const lines = [...new Set(arrivals.map(a => a.lineName).filter(Boolean))].sort();
+
+  const detail = `
+    <div class="detail-card">
+      <div class="name">${stationName}</div>
+      <div class="detail-grid">
+        <span class="lbl">NaPTAN</span><span>${naptan}</span>
+        <span class="lbl">In app as</span><span>${cfg ? `<span class="key-badge">${cfg.key}</span> ${cfg.loc} — ${cfg.sub}` : '<span style="color:#888">not in app config</span>'}</span>
+        <span class="lbl">Config routes</span><span class="routes">${cfg ? cfg.routes : '—'}</span>
+        <span class="lbl">Mode</span><span>${first.modeName || '—'}</span>
+        <span class="lbl">Live lines</span><span>${lines.length ? lines.map(l => `<span class="pill">${l}</span>`).join('') : '<span style="color:#888">none reported</span>'}</span>
+        <span class="lbl">Platform</span><span>${first.platformName || '—'}</span>
+      </div>
+    </div>`;
+
+  const rows = within30.map(a => `
+    <tr>
+      <td><span class="mins ${minsClass(a.mins)}">${a.mins <= 0 ? 'due' : a.mins + ' min'}</span></td>
+      <td><span class="line-badge">${a.lineName || '?'}</span></td>
+      <td>${a.destinationName || a.towards || '—'}</td>
+      <td>${fmtTime(a.expectedArrival)}</td>
+      <td style="color:#666">${a.platformName || '—'}</td>
+    </tr>`).join('');
+
+  const table = within30.length
+    ? `<table class="arr">
+         <thead><tr><th>In</th><th>Route</th><th>Destination</th><th>Due</th><th>Platform</th></tr></thead>
+         <tbody>${rows}</tbody>
+       </table>`
+    : `<div class="detail-card" style="color:#888">No arrivals within the next 30 minutes${arrivals.length ? ` (${arrivals.length} further out)` : ''}.</div>`;
+
+  document.getElementById('result').innerHTML = detail + table;
+}
+
+// Test every NaPTAN sequentially and flag failures / empty boards in the catalogue
+async function testAll() {
+  setStatus('Testing all NaPTANs…');
+  const all = CATALOGUE.flatMap(b => b.stops);
+  let ok = 0, empty = 0, fail = 0;
+  for (const s of all) {
+    const cell = document.getElementById(`stat-${s.naptan}`);
+    if (cell) { cell.textContent = '…'; cell.style.color = '#888'; }
+    try {
+      const arrivals = await fetchArrivals(s.naptan);
+      const n = arrivals.filter(a => (a.timeToStation || 0) / 60 <= 30).length;
+      if (cell) {
+        if (n > 0) { cell.textContent = `✓ ${n}`; cell.style.color = '#00e676'; ok++; }
+        else       { cell.textContent = '○ 0';   cell.style.color = '#ffb340'; empty++; }
+      }
+    } catch (e) {
+      if (cell) { cell.textContent = '✕'; cell.style.color = '#ff4d6a'; cell.title = e.message; }
+      fail++;
+    }
+  }
+  setStatus(`Tested ${all.length} NaPTANs — ${ok} with arrivals, ${empty} empty (0 in 30 min), ${fail} failed.`);
+}
+
+function renderCatalogue() {
+  document.getElementById('catalogue').innerHTML = CATALOGUE.map(b => `
+    <div class="loc-block">
+      <div class="loc-title">${b.loc}</div>
+      <table class="cat">
+        <thead><tr><th style="width:50px">Key</th><th style="width:120px">NaPTAN</th><th>Name</th><th>Direction</th><th>Routes</th><th style="width:60px">Status</th></tr></thead>
+        <tbody>${b.stops.map(s => `
+          <tr>
+            <td><span class="key-badge">${s.key}</span></td>
+            <td><span class="nap" onclick="lookup('${s.naptan}')">${s.naptan}</span></td>
+            <td>${s.name}</td>
+            <td style="color:#888">${s.sub}</td>
+            <td class="routes">${s.routes}</td>
+            <td id="stat-${s.naptan}" style="color:#555">—</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`).join('');
+}
+
+renderCatalogue();
+</script>
+</body>
+</html>
