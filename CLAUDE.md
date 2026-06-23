@@ -12,6 +12,8 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 
 ```
 public/index.html          Single-file PWA (all HTML + CSS + JS)
+public/clj-test.html       Diagnostic page — CLJ departures with grouped view, filter debug, and stats
+public/highlight-test.html Test page — verifies calling-points API and RAY/WBO highlight detection
 api/tfl.js                 Vercel serverless function — TfL arrivals proxy (buses, tube, tram)
 api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepartureBoard)
 api/calling-points.js      Vercel serverless function — NR calling points (GetServiceDetails)
@@ -244,9 +246,9 @@ const S = {
 | `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
 | `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only |
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
-| `buildCard(label, chips, rows, type, id, sub)` | Shared card HTML builder for NR/tube/tram |
+| `buildCard(label, chips, rows, type, sub)` | Shared card HTML builder for NR/tube/tram |
 | `depRow(r, type)` | Single departure row HTML |
-| `renderRows(rows, type, id)` | Maps rows to `depRow` HTML |
+| `renderRows(rows, type)` | Maps rows to `depRow` HTML |
 | `toggleHighlight(id)` | Toggles highlight button, fetches calling points on demand, re-renders NR section |
 | `setViewMode(id, mode)` | Switches grouped/platform, re-renders NR from cache |
 | `toggleSubgroup(header)` | Collapses/expands bus subgroup |

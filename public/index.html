@@ -442,21 +442,21 @@ function depRow(r, type){
   </div>`;
 }
 
-function renderRows(rows, type, id){
+function renderRows(rows, type){
   if(!rows.length) return '<div class="state-row">No upcoming departures</div>';
   return rows.map(r=>depRow(r,type)).join('');
 }
 
 // Build a departure card for NR / tube / tram groups
 // id passed for NR filter lookup; null for tube/tram (no filter)
-function buildCard(label, chips, rows, type, id, sub){
+function buildCard(label, chips, rows, type, sub){
   return `<div class="stop-card">
     <div class="stop-header"><div class="stop-name-row"><div>
       <div class="stop-name">${label}</div>
       ${sub?`<div class="stop-sub">${sub}</div>`:''}
       ${chips?`<div class="plat-chips">${chips}</div>`:''}
     </div></div></div>
-    <div>${renderRows(rows,type,id)}</div>
+    <div>${renderRows(rows,type)}</div>
   </div>`;
 }
 
@@ -754,7 +754,7 @@ function renderNRData(loc,nrData){
       if(!rows.length) return;
       rows.sort((a,b)=>a.mins-b.mins);
       const chipPlats=grp.plats.length?grp.plats:[...new Set(rows.map(r=>r.plat).filter(Boolean))];
-      cardsHtml+=buildCard(grp.label,platChips(chipPlats),rows,'train',id);
+      cardsHtml+=buildCard(grp.label,platChips(chipPlats),rows,'train');
     });
   }
 
@@ -775,7 +775,7 @@ function renderNRData(loc,nrData){
     cardsHtml+=buildCard(
       plat==='TBA'?'Platform TBA':'Platform '+plat,
       `<span class="plat-chip">Plat ${plat}</span>`,
-      rows,'train',id,
+      rows,'train',
       plat==='TBA'?'Platform not yet assigned':null
     );
   });
@@ -835,7 +835,7 @@ function renderTubeData(loc,tubeData){
       if(!rows.length) return;
       rows.sort((a,b)=>a.mins-b.mins);
       const m=pName.match(/eastbound|westbound/i);
-      html+=buildCard(m?m[0].charAt(0).toUpperCase()+m[0].slice(1).toLowerCase():pName, null, rows, 'tube', null);
+      html+=buildCard(m?m[0].charAt(0).toUpperCase()+m[0].slice(1).toLowerCase():pName, null, rows, 'tube');
     });
   } else {
     loc.tube.forEach((lc,i)=>{
@@ -850,7 +850,7 @@ function renderTubeData(loc,tubeData){
         if(!rows.length) return;
         const chips=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))]
           .map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
-        html+=buildCard(lc.label, chips, rows, 'tube', null);
+        html+=buildCard(lc.label, chips, rows, 'tube');
       } else {
         // Standard: group by platformName, one card per direction/platform
         const byPlatName={};
@@ -864,7 +864,7 @@ function renderTubeData(loc,tubeData){
         Object.entries(byPlatName).sort(([a],[b])=>a.localeCompare(b)).forEach(([pName,rows])=>{
           if(!rows.length) return;
           rows.sort((a,b)=>a.mins-b.mins);
-          html+=buildCard(lc.label, null, rows, 'tube', null, pName);
+          html+=buildCard(lc.label, null, rows, 'tube', pName);
         });
       }
     });
@@ -901,7 +901,7 @@ function renderTramData(loc,tramData){
         mins:Math.round(a.timeToStation/60), time:fmtTime(a.expectedArrival), note:a.towards||null,
         plat:a.platformName?(a.platformName.replace(/Platform\s*/i,'').trim()||null):null }));
     if(!rows.length) return;
-    html+=buildCard(lc.label, null, rows, 'tram', null);
+    html+=buildCard(lc.label, null, rows, 'tram');
   });
   return html||'<div class="state-row">No upcoming tram arrivals</div>';
 }

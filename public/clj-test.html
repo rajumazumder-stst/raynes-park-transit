@@ -97,8 +97,6 @@ const GROUPS = [
 ];
 const DYNAMIC_PLAT = { '17':{ SN:'Brighton Main Line', LO:'London Overground' } };
 const PLAT_FIRST = ['11'];
-const HIGHLIGHT_STOPS = ['Raynes Park','Wimbledon Chase'];
-
 let showFiltered = true;
 let rawVisible = false;
 let rawData = null;
@@ -130,11 +128,6 @@ function minsLabel(m){
   return {text:m+' min', cls:'gone'};
 }
 
-function isHighlight(dest, cps){
-  if(cps && cps.length) return cps.some(cp => HIGHLIGHT_STOPS.some(h => cp.toLowerCase().includes(h.toLowerCase())));
-  return HIGHLIGHT_STOPS.some(h => (dest||'').toLowerCase().includes(h.toLowerCase()));
-}
-
 function pill(op){
   if(!op) return `<span class="pill p-empty">?</span>`;
   return `<span class="pill p-${op}">${op}</span>`;
@@ -147,12 +140,11 @@ function platTag(plat){
 function depRowHtml(r, filterReason){
   const cls = filterReason ? 'row filtered' : (r.cancelled ? 'row cancelled' : 'row');
   const l = minsLabel(r.mins ?? 999);
-  const hi = isHighlight(r.dest, r.callingPoints);
   const note = r.delayed ? `<div class="note">⚠ was ${r.std}</div>` : '';
   const fr = filterReason ? `<div class="filter-reason">${filterReason}</div>` : '';
   return `<div class="${cls}">
     ${pill(r.op)}
-    <div><div class="dest">${r.dest||'—'}${hi?' ★':''}</div>${note}${fr}</div>
+    <div><div class="dest">${r.dest||'—'}</div>${note}${fr}</div>
     <div class="dep-time">${r.displayTime||'--:--'}</div>
     <div class="dep-mins ${l.cls}">${l.text}</div>
     ${platTag(r.plat)}
@@ -182,8 +174,6 @@ function render(data){
       std: svc.std, etd: svc.etd, displayTime, mins,
       dest: svc.destination, op, plat,
       cancelled: isCancelled, delayed: isDelayed,
-      callingPoints: svc.callingPoints || [],
-      serviceId: svc.serviceId,
       filterReason,
     };
   });

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Highlight Test — Raynes Park / Wimbledon Chase</title>
+<style>
+  body { font-family: monospace; background: #060c18; color: #cdd6f4; margin: 0; padding: 16px; }
+  h1 { color: #2a7fff; font-size: 1.1rem; margin-bottom: 16px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  label { color: #888; font-size: 0.85rem; }
+  input, select { background: #0e1828; border: 1px solid #1e3050; color: #cdd6f4; padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; }
+  button { background: #2a7fff; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-family: monospace; font-size: 0.9rem; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: #1e3050; }
+  #status { font-size: 0.8rem; color: #888; margin-bottom: 12px; min-height: 1.2em; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+  th { background: #132035; color: #2a7fff; padding: 6px 10px; text-align: left; border-bottom: 1px solid #1e3050; position: sticky; top: 0; }
+  td { padding: 5px 10px; border-bottom: 1px solid #0e1828; vertical-align: top; }
+  tr.highlight { background: #0a2010; }
+  tr.highlight td:first-child { border-left: 3px solid #00e676; }
+  .badge { display: inline-block; background: #00e676; color: #060c18; border-radius: 3px; padding: 1px 5px; font-size: 0.75rem; font-weight: bold; margin-right: 4px; }
+  .stops { color: #555; font-size: 0.75rem; line-height: 1.5; }
+  .stops .match { color: #00e676; font-weight: bold; }
+  .err { color: #ff4d6a; }
+  .pending { color: #888; font-style: italic; }
+  .section { margin-bottom: 24px; }
+  .raw-toggle { color: #2a7fff; cursor: pointer; font-size: 0.75rem; text-decoration: underline; }
+  pre { background: #0e1828; border: 1px solid #1e3050; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 0.75rem; color: #a6e3a1; display: none; }
+</style>
+</head>
+<body>
+<h1>Highlight Test — Raynes Park / Wimbledon Chase</h1>
+
+<div class="section controls">
+  <label>Station CRS:</label>
+  <input id="crs" type="text" value="WAT" maxlength="3" style="width:60px; text-transform:uppercase;">
+  <button id="fetchBtn" onclick="fetchBoard()">Fetch Departures</button>
+  <button id="highlightBtn" class="secondary" onclick="fetchHighlights()" disabled>Fetch Calling Points &amp; Highlight</button>
+  <button class="secondary" onclick="clearHighlights()">Clear Highlights</button>
+</div>
+
+<div id="status">Enter a CRS code and click Fetch Departures.</div>
+
+<div id="output"></div>
+
+<script>
+const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
+let services = [];
+
+function setStatus(msg, isErr) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : '';
+}
+
+async function fetchBoard() {
+  const crs = document.getElementById('crs').value.trim().toUpperCase().slice(0,3);
+  if (!crs) { setStatus('Enter a CRS code.', true); return; }
+
+  setStatus(`Fetching departures from ${crs}…`);
+  document.getElementById('fetchBtn').disabled = true;
+  document.getElementById('highlightBtn').disabled = true;
+  services = [];
+  document.getElementById('output').innerHTML = '';
+
+  try {
+    const res = await fetch(`/api/trains?crs=${crs}&rows=150`);
+    const data = await res.json();
+    if (data.error) { setStatus(`API error: ${data.error}`, true); return; }
+
+    services = data.services || [];
+    setStatus(`${services.length} service(s) returned from ${crs}. Click "Fetch Calling Points & Highlight" to identify RAY/WBO services.`);
+    renderTable(false);
+    document.getElementById('highlightBtn').disabled = false;
+  } catch(e) {
+    setStatus(`Fetch failed: ${e.message}`, true);
+  } finally {
+    document.getElementById('fetchBtn').disabled = false;
+  }
+}
+
+async function fetchHighlights() {
+  if (!services.length) return;
+  setStatus(`Fetching calling points for ${services.length} service(s)…`);
+  document.getElementById('highlightBtn').disabled = true;
+
+  // Fetch calling points in parallel, attach to service objects
+  await Promise.all(services.map(async svc => {
+    if (svc._cpDone) return;
+    try {
+      const res = await fetch(`/api/calling-points?serviceId=${encodeURIComponent(svc.serviceId)}`, {signal: AbortSignal.timeout(10000)});
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({error:'non-JSON response'}));
+        svc._cpError = `HTTP ${res.status}: ${err.error||'unknown'}`;
+        svc._cpRaw = null;
+        svc.callingPoints = [];
+      } else {
+        const cp = await res.json();
+        svc.callingPoints = cp.callingPoints || [];
+        svc._cpRaw = cp._raw;
+        svc._cpError = null;
+      }
+    } catch(e) {
+      svc._cpError = e.message;
+      svc.callingPoints = [];
+    }
+    svc._cpDone = true;
+  }));
+
+  const matchCount = services.filter(s => isHighlight(s)).length;
+  setStatus(`Done. ${matchCount} of ${services.length} service(s) call at Raynes Park or Wimbledon Chase.`);
+  renderTable(true);
+  document.getElementById('highlightBtn').disabled = false;
+}
+
+function isHighlight(svc) {
+  if (!svc.callingPoints || !svc.callingPoints.length) return false;
+  return svc.callingPoints.some(cp =>
+    HIGHLIGHT_STOPS.some(h => cp.toLowerCase().includes(h.toLowerCase()))
+  );
+}
+
+function clearHighlights() {
+  services.forEach(s => { s.callingPoints = null; s._cpDone = false; s._cpError = null; s._cpRaw = null; });
+  renderTable(false);
+  setStatus('Highlights cleared. Re-click "Fetch Calling Points & Highlight" to re-check.');
+}
+
+function renderTable(showCp) {
+  const rows = services.map((svc, i) => {
+    const hi = showCp && isHighlight(svc);
+    const cpHtml = !showCp ? '' : svc._cpError
+      ? `<div class="err">Error: ${svc._cpError}</div>`
+      : !svc._cpDone
+        ? `<div class="pending">not fetched</div>`
+        : svc.callingPoints.length === 0
+          ? `<div class="err">No calling points returned</div>`
+          : `<div class="stops">${svc.callingPoints.map(cp => {
+              const match = HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase()));
+              return match ? `<span class="match">${cp}</span>` : cp;
+            }).join(' → ')}</div>
+            <span class="raw-toggle" onclick="toggleRaw('raw-${i}')">raw JSON</span>
+            <pre id="raw-${i}">${JSON.stringify(svc._cpRaw,null,2)}</pre>`;
+
+    const dest = svc.destination || '—';
+    const destMatch = HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase()));
+
+    return `<tr class="${hi ? 'highlight' : ''}">
+      <td>${hi ? '<span class="badge">★</span>' : ''}${svc.std||'—'} / ${svc.etd||'—'}</td>
+      <td>${svc.platform||'?'}</td>
+      <td>${dest}${destMatch ? ' <span class="badge">term</span>' : ''}</td>
+      <td style="max-width:360px">${cpHtml || (showCp ? '' : '<span style="color:#555">—</span>')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('output').innerHTML = `
+    <table>
+      <thead><tr><th>Std / Etd</th><th>Plat</th><th>Destination</th><th>Calling Points</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="4" style="color:#555">No services</td></tr>'}</tbody>
+    </table>`;
+}
+
+function toggleRaw(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+</script>
+</body>
+</html>
