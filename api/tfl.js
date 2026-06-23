@@ -1,5 +1,5 @@
 const TFL_BASE = 'https://api.tfl.gov.uk';
-const ALLOWED  = /^(StopPoint\/[^/]+\/Arrivals|Line\/[^/]+\/Arrivals\/[^/]+)$/;
+const ALLOWED  = /^(StopPoint\/[^/]+\/Arrivals|StopPoint\/[^/]+\/Disruption|Line\/[^/]+\/Arrivals\/[^/]+)$/;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

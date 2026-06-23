@@ -46,11 +46,16 @@
   .mins.due  { color: #ff4d6a; font-weight: bold; }
   .mins.soon { color: #ffb340; font-weight: bold; }
   .mins.norm { color: #00c9a7; }
+
+  .closed-banner { background: #2a0d14; border: 1px solid #ff4d6a; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; }
+  .closed-banner .tag { display: inline-block; background: #ff4d6a; color: #060c18; border-radius: 3px; padding: 1px 7px; font-size: 0.75rem; font-weight: bold; margin-right: 8px; }
+  .closed-banner .desc { color: #ffb3c0; font-size: 0.8rem; white-space: pre-line; margin-top: 6px; }
+  .closed-cell { color: #ff4d6a; font-weight: bold; }
 </style>
 </head>
 <body>
 <h1>NAPTAN Test — Bus Stop Arrivals</h1>
-<div class="sub">Tests every bus-stop NaPTAN in the app against <code>/api/tfl?path=StopPoint/{naptan}/Arrivals</code>. Shows stop details and departures within the next 30 minutes. Click any NaPTAN, or enter one below.</div>
+<div class="sub">Tests every bus-stop NaPTAN in the app against TfL <code>StopPoint/{naptan}/Arrivals</code> and <code>/Disruption</code>. Shows stop details, any temporary closure, and departures within the next 30 minutes. Click any NaPTAN, or enter one below.</div>
 
 <div class="controls">
   <label>NaPTAN:</label>
@@ -138,6 +143,10 @@ const fmtTime = iso => {
   try { return new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }); }
   catch { return '—'; }
 };
+const fmtDate = iso => {
+  try { return new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch { return '—'; }
+};
 const minsClass = m => m <= 3 ? 'due' : m <= 8 ? 'soon' : 'norm';
 
 async function fetchArrivals(naptan) {
@@ -146,6 +155,19 @@ async function fetchArrivals(naptan) {
   if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
   if (!Array.isArray(data)) throw new Error('Unexpected response (not an arrivals array)');
   return data;
+}
+
+// Returns the active Closure disruption for a stop, or null. TfL flags closed
+// bus stops as DisruptedPoint records with type === 'Closure'.
+async function fetchClosure(naptan) {
+  const res = await fetch(`/api/tfl?path=StopPoint/${encodeURIComponent(naptan)}/Disruption`, { signal: AbortSignal.timeout(12000) });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!Array.isArray(data)) return null;
+  const closures = data.filter(d => d.type === 'Closure');
+  if (!closures.length) return null;
+  // most-recent reopen date wins
+  return closures.sort((a, b) => new Date(b.toDate || 0) - new Date(a.toDate || 0))[0];
 }
 
 async function lookup(rawNap) {
@@ -158,14 +180,17 @@ async function lookup(rawNap) {
   document.getElementById('napInput').value = naptan;
 
   try {
-    const arrivals = await fetchArrivals(naptan);
+    const [arrivals, closure] = await Promise.all([
+      fetchArrivals(naptan),
+      fetchClosure(naptan).catch(() => null),
+    ]);
     const within30 = arrivals
       .map(a => ({ ...a, mins: Math.round((a.timeToStation || 0) / 60) }))
       .filter(a => a.mins <= 30)
       .sort((a, b) => a.timeToStation - b.timeToStation);
 
-    renderResult(naptan, arrivals, within30);
-    setStatus(`${arrivals.length} total arrival(s), ${within30.length} within 30 min for ${naptan}.`);
+    renderResult(naptan, arrivals, within30, closure);
+    setStatus(`${closure ? 'CLOSED — ' : ''}${arrivals.length} total arrival(s), ${within30.length} within 30 min for ${naptan}.`, !!closure && !arrivals.length);
   } catch (e) {
     document.getElementById('result').innerHTML = `<div class="detail-card err">Failed for ${naptan}: ${e.message}</div>`;
     setStatus(`Lookup failed: ${e.message}`, true);
@@ -174,11 +199,17 @@ async function lookup(rawNap) {
   }
 }
 
-function renderResult(naptan, arrivals, within30) {
+function renderResult(naptan, arrivals, within30, closure) {
   const cfg = CONFIG_BY_NAP[naptan];
   const first = arrivals[0] || {};
-  const stationName = first.stationName || (cfg ? cfg.name : '—');
+  const stationName = first.stationName || closure?.commonName || (cfg ? cfg.name : '—');
   const lines = [...new Set(arrivals.map(a => a.lineName).filter(Boolean))].sort();
+
+  const banner = closure ? `
+    <div class="closed-banner">
+      <span class="tag">CLOSED</span>${closure.toDate ? `until ${fmtDate(closure.toDate)}` : ''}
+      <div class="desc">${(closure.description || 'Bus stop closed.').replace(/\\n/g, '\n')}</div>
+    </div>` : '';
 
   const detail = `
     <div class="detail-card">
@@ -209,30 +240,36 @@ function renderResult(naptan, arrivals, within30) {
        </table>`
     : `<div class="detail-card" style="color:#888">No arrivals within the next 30 minutes${arrivals.length ? ` (${arrivals.length} further out)` : ''}.</div>`;
 
-  document.getElementById('result').innerHTML = detail + table;
+  document.getElementById('result').innerHTML = banner + detail + table;
 }
 
 // Test every NaPTAN sequentially and flag failures / empty boards in the catalogue
 async function testAll() {
   setStatus('Testing all NaPTANs…');
   const all = CATALOGUE.flatMap(b => b.stops);
-  let ok = 0, empty = 0, fail = 0;
+  let ok = 0, empty = 0, closed = 0, fail = 0;
   for (const s of all) {
     const cell = document.getElementById(`stat-${s.naptan}`);
-    if (cell) { cell.textContent = '…'; cell.style.color = '#888'; }
+    if (cell) { cell.textContent = '…'; cell.style.color = '#888'; cell.title = ''; }
     try {
-      const arrivals = await fetchArrivals(s.naptan);
+      const [arrivals, closure] = await Promise.all([
+        fetchArrivals(s.naptan),
+        fetchClosure(s.naptan).catch(() => null),
+      ]);
       const n = arrivals.filter(a => (a.timeToStation || 0) / 60 <= 30).length;
       if (cell) {
-        if (n > 0) { cell.textContent = `✓ ${n}`; cell.style.color = '#00e676'; ok++; }
-        else       { cell.textContent = '○ 0';   cell.style.color = '#ffb340'; empty++; }
+        if (closure) {
+          cell.textContent = closure.toDate ? `✕ closed → ${fmtDate(closure.toDate)}` : '✕ closed';
+          cell.style.color = '#ff4d6a'; cell.title = (closure.description || '').replace(/\\n/g, '\n'); closed++;
+        } else if (n > 0) { cell.textContent = `✓ ${n}`; cell.style.color = '#00e676'; ok++; }
+        else              { cell.textContent = '○ 0';   cell.style.color = '#ffb340'; empty++; }
       }
     } catch (e) {
-      if (cell) { cell.textContent = '✕'; cell.style.color = '#ff4d6a'; cell.title = e.message; }
+      if (cell) { cell.textContent = '⚠'; cell.style.color = '#ff4d6a'; cell.title = e.message; }
       fail++;
     }
   }
-  setStatus(`Tested ${all.length} NaPTANs — ${ok} with arrivals, ${empty} empty (0 in 30 min), ${fail} failed.`);
+  setStatus(`Tested ${all.length} NaPTANs — ${ok} with arrivals, ${empty} empty (0 in 30 min), ${closed} closed, ${fail} errored.`);
 }
 
 function renderCatalogue() {
@@ -240,7 +277,7 @@ function renderCatalogue() {
     <div class="loc-block">
       <div class="loc-title">${b.loc}</div>
       <table class="cat">
-        <thead><tr><th style="width:50px">Key</th><th style="width:120px">NaPTAN</th><th>Name</th><th>Direction</th><th>Routes</th><th style="width:60px">Status</th></tr></thead>
+        <thead><tr><th style="width:50px">Key</th><th style="width:120px">NaPTAN</th><th>Name</th><th>Direction</th><th>Routes</th><th style="width:150px">Status</th></tr></thead>
         <tbody>${b.stops.map(s => `
           <tr>
             <td><span class="key-badge">${s.key}</span></td>
