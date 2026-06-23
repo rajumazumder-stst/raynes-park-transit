@@ -312,7 +312,11 @@ const LOCATIONS = [
         { label:'West London Line',      plats:['16'] },
       ],
       dynamicPlatforms:{ '17':{ SN:'Brighton Main Line', LO:'London Overground' } }
-    }
+    },
+    buses:{ flat:true, stops:[
+      { key:'CLJ_E', naptan:'490005331E', name:'Clapham Junction Stn/the Falcon', sub:'Falcon Road – northbound',     routes:'49 · 170 · 319 · 344 · 345 · 639 · 670 · N19 · N31', letter:'E', filterDest:'Clapham Junction' },
+      { key:'CLJ_M', naptan:'490001069M', name:'Clapham Junction Station',        sub:"St John's Hill – southwestbound", routes:'37 · 39 · 87 · 156 · 170 · 337 · 639 · 670 · N87', letter:'M', filterDest:'Clapham Junction' },
+    ]}
   },
   { id:'kingston', name:'Kingston',
     nr:{ crs:'KNG', groups:[
@@ -431,6 +435,14 @@ async function fetchBusClosure(naptan){
 }
 function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
 function getLetter(stop){ return stop.letter!==undefined ? stop.letter : stop.key.split('_').pop(); }
+// Shared TfL tube/tram arrival → departure row. Returns null if outside the 15-minute window.
+// Callers may override `plat` afterwards (Wimbledon District, tram).
+function tflRow(a, pillClass){
+  const mins=Math.round(a.timeToStation/60);
+  if(mins>15) return null;
+  return { route:'', pillClass, dest:a.destinationName||a.towards||'—', mins,
+    time:fmtTime(a.expectedArrival), note:a.towards||null, plat:null };
+}
 
 // ══════════════════════════════════════════════════════════════════
 // DEPARTURE RENDERERS  (single unified pipeline)
@@ -625,7 +637,9 @@ async function fetchBusStop(key){
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
     if(!Array.isArray(data)) throw new Error('Invalid response');
-    const rows=data.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6)
+    // Per-stop destination filter: drop arrivals terminating at stop.filterDest (e.g. CLJ buses ending at "Clapham Junction").
+    const arrivals=stop.filterDest ? data.filter(d=>d.destinationName!==stop.filterDest) : data;
+    const rows=arrivals.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6)
       .map(d=>({ route:d.lineName, dest:d.destinationName||d.towards||'\u2014',
         mins:Math.round(d.timeToStation/60), time:fmtTime(d.expectedArrival), note:null, plat:null }));
     if(rows.length){ el.innerHTML=rows.map(r=>depRow(r,'bus')).join(''); return; }
@@ -837,11 +851,11 @@ function renderTubeData(loc,tubeData){
     const merged={};
     loc.tube.forEach((lc,i)=>{
       (tubeData[i]||[]).forEach(a=>{
-        const mins=Math.round(a.timeToStation/60);
-        if(mins>15) return;
+        const row=tflRow(a,lc.pillClass);
+        if(!row) return;
+        row.note=null;  // merged Eastbound/Westbound cards omit the per-row "towards" note
         const p=a.platformName||lc.line;
-        if(!merged[p]) merged[p]=[];
-        merged[p].push({ route:'', pillClass:lc.pillClass, dest:a.destinationName||a.towards||'\u2014', mins, time:fmtTime(a.expectedArrival), note:null, plat:null });
+        (merged[p]||(merged[p]=[])).push(row);
       });
     });
     const dirOrder=p=>p.toLowerCase().includes('east')?0:p.toLowerCase().includes('west')?1:2;
@@ -857,10 +871,11 @@ function renderTubeData(loc,tubeData){
       if(!arrivals.length) return;
       // Wimbledon District line: all 4 platforms in one combined card
       if(lc.line==='district'&&crs==='WIM'){
-        const rows=arrivals.filter(a=>Math.round(a.timeToStation/60)<=15).sort((a,b)=>a.timeToStation-b.timeToStation)
-          .map(a=>({ route:'', pillClass:lc.pillClass, dest:a.destinationName||a.towards||'\u2014',
-            mins:Math.round(a.timeToStation/60), time:fmtTime(a.expectedArrival), note:a.towards||null,
-            plat:a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null }));
+        const rows=arrivals.map(a=>{
+          const row=tflRow(a,lc.pillClass);
+          if(row) row.plat=a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null;
+          return row;
+        }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
         if(!rows.length) return;
         const chips=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))]
           .map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
@@ -869,11 +884,10 @@ function renderTubeData(loc,tubeData){
         // Standard: group by platformName, one card per direction/platform
         const byPlatName={};
         arrivals.forEach(a=>{
-          const mins=Math.round(a.timeToStation/60);
-          if(mins>15) return;
+          const row=tflRow(a,lc.pillClass);
+          if(!row) return;
           const p=a.platformName||lc.line;
-          if(!byPlatName[p]) byPlatName[p]=[];
-          byPlatName[p].push({ route:'', pillClass:lc.pillClass, dest:a.destinationName||a.towards||'\u2014', mins, time:fmtTime(a.expectedArrival), note:a.towards||null, plat:null });
+          (byPlatName[p]||(byPlatName[p]=[])).push(row);
         });
         Object.entries(byPlatName).sort(([a],[b])=>a.localeCompare(b)).forEach(([pName,rows])=>{
           if(!rows.length) return;
@@ -903,10 +917,11 @@ function renderTramData(loc,tramData){
   loc.tram.forEach((lc,i)=>{
     let arrivals=tramData[i]||[];
     if(lc.inboundOnly) arrivals=arrivals.filter(a=>a.direction==='inbound');
-    const rows=arrivals.filter(a=>Math.round(a.timeToStation/60)<=15).sort((a,b)=>a.timeToStation-b.timeToStation)
-      .map(a=>({ route:'', pillClass:lc.pillClass, dest:a.destinationName||a.towards||'\u2014',
-        mins:Math.round(a.timeToStation/60), time:fmtTime(a.expectedArrival), note:a.towards||null,
-        plat:a.platformName?(a.platformName.replace(/Platform\s*/i,'').trim()||null):null }));
+    const rows=arrivals.map(a=>{
+      const row=tflRow(a,lc.pillClass);
+      if(row) row.plat=a.platformName?(a.platformName.replace(/Platform\s*/i,'').trim()||null):null;
+      return row;
+    }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
     if(!rows.length) return;
     html+=buildCard(lc.label, null, rows, 'tram');
   });

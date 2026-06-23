@@ -107,10 +107,11 @@ Single unified array. Each entry:
 Each bus stop object:
 
 ```js
-{ key, naptan, name, sub, routes, letter? }
-// key    — unique string used in DOM IDs and STOP_MAP
-// naptan — NaPTAN ID passed to TfL Arrivals API
-// letter — badge label; if omitted, derived from key suffix; '' renders empty gradient badge
+{ key, naptan, name, sub, routes, letter?, filterDest? }
+// key        — unique string used in DOM IDs and STOP_MAP
+// naptan     — NaPTAN ID passed to TfL Arrivals API
+// letter     — badge label; if omitted, derived from key suffix; '' renders empty gradient badge
+// filterDest — optional; arrivals whose destinationName exactly equals this string are dropped (this stop only)
 ```
 
 ### Location summary
@@ -126,7 +127,7 @@ Each bus stop object:
 | 7 | South Wimbledon | — | Northern | Merton Park (inboundOnly) | 1 flat stop |
 | 8 | Colliers Wood | — | Northern | — | flat |
 | 9 | Norbiton | NBT | — | — | flat |
-| 10 | Clapham Junction | CLJ (dynamic) | — | — | — |
+| 10 | Clapham Junction | CLJ (dynamic) | — | — | flat (2 stops, `filterDest`) |
 | 11 | Kingston | KNG | — | — | 2 subgroups |
 | 12 | Putney | PUT | District | — | flat |
 | 13 | Staines | SNS | — | — | — |
@@ -240,10 +241,11 @@ const S = {
 | `renderTubeData(loc, tubeData)` | Handles `mergeLines` (Blackfriars), Wimbledon combined, standard |
 | `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals via `fetchLineArrivals`, writes to `#tram-{id}` only |
 | `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
-| `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only; if no arrivals, checks closure via `fetchBusClosure` |
+| `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only; drops arrivals matching `stop.filterDest`; if no arrivals, checks closure via `fetchBusClosure` |
 | `fetchBusClosure(naptan)` | Fetches `StopPoint/{naptan}/Disruption`; returns the active `type:"Closure"` record (latest reopen date) or `null` |
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
 | `buildCard(label, chips, rows, type, sub)` | Shared card HTML builder for NR/tube/tram |
+| `tflRow(a, pillClass)` | Shared TfL arrival → row mapper for tube/tram; returns `null` if outside the 15-min window (callers override `plat` as needed) |
 | `depRow(r, type)` | Single departure row HTML |
 | `renderRows(rows, type)` | Maps rows to `depRow` HTML |
 | `toggleHighlight(id)` | Toggles highlight button, fetches highlight IDs via `filterCrs`, re-renders NR section |
@@ -261,6 +263,7 @@ const S = {
 - **Vauxhall NR** — platforms not in `['6','8']` routed dynamically by destination: contains "London Waterloo" → London Waterloo group, others → Waterloo-Reading line group
 - **Clapham Junction platform 17** — SN services → Brighton Main Line, LO services → London Overground (via `dynamicPlatforms`)
 - **Merton Park tram (South Wimbledon)** — fetched via `Line/tram/Arrivals`, filtered to `direction === 'inbound'` via `inboundOnly: true`
+- **Clapham Junction buses** — both stops set `filterDest:'Clapham Junction'`, so buses terminating at Clapham Junction (e.g. 35, 39, 49, 295, C3) are dropped from the live list; this flag is per-stop and affects no other location
 - **Bus stops with no letter** — `letter: ''` renders an empty gradient badge
 - **Closed bus stops** — when a stop returns no arrivals, `fetchBusStop` checks `StopPoint/{naptan}/Disruption`. A `type:"Closure"` record renders a red "Stop closed until {date}" notice; stops with no arrivals and no closure record keep the neutral "No upcoming departures" state. (TfL only flags temporary hooded closures this way — a stop quietly dropped from live predictions without a `Closure` record, as seen at some Norbiton stops, cannot be detected via the API.)
 
