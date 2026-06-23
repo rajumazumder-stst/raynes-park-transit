@@ -679,6 +679,11 @@ async function fetchHighlightIds(crs){
   const ids=new Set();
   if(rayRes.status==='fulfilled'&&!rayRes.value.error) (rayRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
   if(wboRes.status==='fulfilled'&&!wboRes.value.error) (wboRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
+  console.log('[highlight] fetchHighlightIds', crs, {
+    rayStatus:rayRes.status, rayError:rayRes.value?.error, rayCount:(rayRes.value?.services||[]).length,
+    wboStatus:wboRes.status, wboError:wboRes.value?.error, wboCount:(wboRes.value?.services||[]).length,
+    totalIds:ids.size, sampleIds:[...ids].slice(0,3)
+  });
   return ids;
 }
 
@@ -701,9 +706,11 @@ function renderNRData(loc,nrData){
     if(mins===null||mins<-2||mins>30) return;
     const op=ATOC_MAP[(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase()]||'';
     if(!byPlat[plat]) byPlat[plat]=[];
+    const _hi=S.highlightActive[id]?(S.highlightIds[id]||new Set()).has(svc.serviceId):false;
+    if(S.highlightActive[id]) console.log('[highlight] svc', svc.std, svc.destination, 'serviceId:', svc.serviceId, 'match:', _hi);
     byPlat[plat].push({ route:op, op, dest:svc.destination||'\u2014', mins, time:displayTime,
       note:isDelayed?`\u26a0 was ${std}`:null, plat,
-      isHighlight:S.highlightActive[id]?(S.highlightIds[id]||new Set()).has(svc.serviceId):false });
+      isHighlight:_hi });
   });
 
   let alertHtml='';
