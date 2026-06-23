@@ -13,10 +13,9 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 ```
 public/index.html          Single-file PWA (all HTML + CSS + JS)
 public/clj-test.html       Diagnostic page — CLJ departures with grouped view, filter debug, and stats
-public/highlight-test.html Test page — verifies calling-points API and RAY/WBO highlight detection
+public/highlight-test.html Test page — verifies filterCrs approach and RAY/WBO highlight detection
 api/tfl.js                 Vercel serverless function — TfL arrivals proxy (buses, tube, tram)
 api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepartureBoard)
-api/calling-points.js      Vercel serverless function — NR calling points (GetServiceDetails)
 vercel.json                Routing config (do not modify)
 ```
 
@@ -25,12 +24,11 @@ vercel.json                Routing config (do not modify)
 | API | Purpose | Key / Token |
 |-----|---------|-------------|
 | TfL Open Data | Buses, tube, tram arrivals | `$TFL_KEY` (Vercel env var) |
-| National Rail LDBWS | Train departures and calling points | `$LDBWS_TOKEN` (Vercel env var) |
+| National Rail LDBWS | Train departures | `$LDBWS_TOKEN` (Vercel env var) |
 
 - NR REST base: `https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120`
 - NR auth: `x-apikey` request header (raildata.org.uk consumer key)
-- `trains.js` called as `/api/trains?crs=RAY&rows=150` — returns up to 149 services (no inline calling points)
-- `calling-points.js` called as `/api/calling-points?serviceId=...` — fetched on demand when the highlight button is activated
+- `trains.js` called as `/api/trains?crs=RAY&rows=150` — returns up to 149 services; also supports `filterCrs=RAY` to return only services calling at that station
 - `tfl.js` called as `/api/tfl?path=StopPoint/{naptan}/Arrivals` or `/api/tfl?path=Line/{line}/Arrivals/{stopId}`
 
 ---
@@ -60,7 +58,7 @@ National Rail → Tube → Tram → Buses (only sections present in the location
 
 ### Filter bar (NR sections)
 
-- **"To Raynes Park / Wimbledon Chase" highlight button** — shown on all NR locations except Raynes Park (RAY) and Wimbledon Chase (WBO). When toggled on, fetches calling points on demand via `/api/calling-points` for every visible service, then re-renders with a green ★ badge on matching rows. All services remain visible (no filtering).
+- **"To Raynes Park / Wimbledon Chase" highlight button** — shown on all NR locations except Raynes Park (RAY) and Wimbledon Chase (WBO). When toggled on, fetches highlight IDs via `filterCrs` and re-renders with a green ★ badge on matching rows. All services remain visible (no filtering).
 - **Grouped / By Platform segmented control** — shown on all NR locations with `nr.groups` defined.
 
 Both rendered inside `.filter-bar` above `#nr-{id}`.
@@ -158,27 +156,22 @@ const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
 
 The "To Raynes Park / Wimbledon Chase" button (shown on all NR locations except RAY and WBO) toggles highlight mode. When active:
 
-1. Calling points are fetched on demand for every cached service via `/api/calling-points` and attached to the service object in `S.nrCache`.
-2. `renderNRData` pre-computes `row.isHighlight` using `isHighlight(dest, callingPoints)` — checks `callingPoints` array first, falls back to destination name match.
-3. `depRow` reads `r.isHighlight` directly to apply the green ★ badge and highlighted row style.
-4. On auto-refresh, if `S.highlightActive[id]` is true, calling points are re-fetched for the new service set before rendering.
+1. Two parallel `GetDepartureBoard` requests are fired via `/api/trains` with `filterCrs=RAY` and `filterCrs=WBO`, returning only services that call at those stops.
+2. The union of their `serviceId` values is stored as a `Set` in `S.highlightIds[id]`.
+3. `renderNRData` sets `row.isHighlight = S.highlightIds[id].has(svc.serviceId)`.
+4. `depRow` reads `r.isHighlight` to apply the green ★ badge and highlighted row style.
+5. On auto-refresh, if `S.highlightActive[id]` is true, highlight IDs are re-fetched before rendering.
 
 All services remain visible regardless of highlight state — no rows are filtered out.
-
-```js
-const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
-```
 
 ---
 
 ## Config constants
 
 ```js
-const TFL_KEY        = process.env.TFL_KEY; // set in Vercel env vars
-const HIGHLIGHT_STOPS = ['Raynes Park', 'Wimbledon Chase'];
-const PLAT_FIRST     = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
-const OP_PILL        = { SW:'pill-SW', TL:'pill-TL', SN:'pill-SN', SE:'pill-SE', LO:'pill-LO', GX:'pill-GX' };
-const ATOC_MAP       = { SW:'SW', TL:'TL', SN:'SN', SE:'SE', LO:'LO', GX:'GX', CS:'SW', VT:'SW', XR:'SW' };
+const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
+const OP_PILL    = { SW:'pill-SW', TL:'pill-TL', SN:'pill-SN', SE:'pill-SE', LO:'pill-LO', GX:'pill-GX' };
+const ATOC_MAP   = { SW:'SW', TL:'TL', SN:'SN', SE:'SE', LO:'LO', GX:'GX', CS:'SW', VT:'SW', XR:'SW' };
 ```
 
 ### Operator codes
@@ -217,8 +210,9 @@ Solid colour blocks, no text:
 const S = {
   currentIdx:     0,     // index into LOCATIONS
   highlightActive: {},   // locId → bool (highlight button toggled on)
+  highlightIds:   {},    // locId → Set<serviceId> of services calling at RAY or WBO
   viewMode:       {},    // locId → 'grouped' | 'platform'
-  nrCache:        {},    // locId → raw NR API response (callingPoints attached per-service after highlight fetch)
+  nrCache:        {},    // locId → raw NR API response
 };
 ```
 
@@ -238,7 +232,7 @@ const S = {
 | `refreshCurrent()` | Spins ↻ button, awaits `fetchAll` for current location |
 | `fetchAll(id)` | Fires NR + tube + tram + all bus stops in parallel via `Promise.allSettled` |
 | `fetchAndRenderNR(loc)` | Fetches `/api/trains`, writes to `#nr-{id}` only |
-| `fetchCallingPoints(services)` | Attaches calling points to service objects in-place |
+| `fetchHighlightIds(crs)` | Fetches `filterCrs=RAY` and `filterCrs=WBO` boards in parallel; returns `Set<serviceId>` |
 | `renderNRData(loc, nrData)` | Full NR render: dynamic routing, grouped/platform view, alert banner |
 | `fetchAndRenderTube(loc)` | Fetches TfL tube arrivals, writes to `#tube-{id}` only |
 | `renderTubeData(loc, tubeData)` | Handles `mergeLines` (Blackfriars), Wimbledon combined, standard |
@@ -249,7 +243,7 @@ const S = {
 | `buildCard(label, chips, rows, type, sub)` | Shared card HTML builder for NR/tube/tram |
 | `depRow(r, type)` | Single departure row HTML |
 | `renderRows(rows, type)` | Maps rows to `depRow` HTML |
-| `toggleHighlight(id)` | Toggles highlight button, fetches calling points on demand, re-renders NR section |
+| `toggleHighlight(id)` | Toggles highlight button, fetches highlight IDs via `filterCrs`, re-renders NR section |
 | `setViewMode(id, mode)` | Switches grouped/platform, re-renders NR from cache |
 | `toggleSubgroup(header)` | Collapses/expands bus subgroup |
 | `classifyVXH(row)` | Vauxhall dynamic group classifier |
@@ -319,6 +313,6 @@ On init, `index.html` fetches its own `Last-Modified` header via a `HEAD` reques
 
 - **Config-only changes** (adding stops, reordering, relabelling): edit only the `LOCATIONS` array
 - **Logic changes**: identify the relevant function and explain what is changing and why before editing
-- **File destinations**: `index.html` → `public/`, `trains.js` and `calling-points.js` → `api/`
+- **File destinations**: `index.html` → `public/`, `trains.js` → `api/`
 - **Output**: produce the complete modified file ready to commit — not diffs
-- **API compatibility**: `trains.js` and `calling-points.js` call signatures are stable; front-end changes should not require backend changes unless explicitly noted
+- **API compatibility**: `trains.js` call signature is stable; front-end changes should not require backend changes unless explicitly noted

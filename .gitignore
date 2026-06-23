@@ -1,3 +1,4 @@
 *.code-workspace
+LDBWS_Documentation.md
 .env
 test-keys.js

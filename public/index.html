@@ -181,7 +181,6 @@
 // ══════════════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════════════
-const HIGHLIGHT_STOPS = ['Raynes Park','Wimbledon Chase'];
 // LOCATIONS — unified array (NR → Tube → Tram → Buses per location)
 const LOCATIONS = [
   { id:'raynes-park', name:'Raynes Park',
@@ -375,6 +374,7 @@ const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
 const S = {
   currentIdx: 0,
   highlightActive: {},  // locId → bool
+  highlightIds: {},     // locId → Set<serviceId> of RAY/WBO matching services
   viewMode: {},      // locId → 'grouped'|'platform'
   nrCache: {},       // locId → raw NR API response
 };
@@ -410,11 +410,6 @@ function fmtTime(s){
   if(s.includes('T')) return new Date(s).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'});
   return s.slice(0,5);
 }
-function isHighlight(dest,callingPoints){
-  if(callingPoints&&callingPoints.length) return callingPoints.some(cp=>HIGHLIGHT_STOPS.some(h=>cp.toLowerCase().includes(h.toLowerCase())));
-  if(!dest) return false;
-  return HIGHLIGHT_STOPS.some(h=>dest.toLowerCase().includes(h.toLowerCase()));
-}
 function loadingHTML(){ return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>'; }
 function errorHTML(msg){ return `<div class="state-row" style="color:var(--accent-red)">\u26a0 ${msg}</div>`; }
 function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
@@ -447,8 +442,6 @@ function renderRows(rows, type){
   return rows.map(r=>depRow(r,type)).join('');
 }
 
-// Build a departure card for NR / tube / tram groups
-// id passed for NR filter lookup; null for tube/tram (no filter)
 function buildCard(label, chips, rows, type, sub){
   return `<div class="stop-card">
     <div class="stop-header"><div class="stop-name-row"><div>
@@ -652,7 +645,7 @@ async function toggleHighlight(id){
   if(!el) return;
   if(S.highlightActive[id]){
     el.innerHTML=loadingHTML();
-    await fetchCallingPoints(cached.services||[]);
+    S.highlightIds[id]=await fetchHighlightIds(loc.nr.crs);
   }
   el.innerHTML=renderNRData(loc,cached);
 }
@@ -671,19 +664,22 @@ async function fetchAndRenderNR(loc){
     const data=await res.json();
     if(data.error) throw new Error(data.error);
     S.nrCache[id]=data;
-    if(S.highlightActive[id]) await fetchCallingPoints(data.services||[]);
+    if(S.highlightActive[id]) S.highlightIds[id]=await fetchHighlightIds(loc.nr.crs);
     el.innerHTML=renderNRData(loc,data);
   }catch(e){ el.innerHTML=errorHTML('Could not load train data'); }
 }
 
-async function fetchCallingPoints(services){
-  await Promise.all(services.map(async svc=>{
-    if(svc.callingPoints||!svc.serviceId) return;
-    try{
-      const res=await fetch(`/api/calling-points?serviceId=${encodeURIComponent(svc.serviceId)}`,{signal:AbortSignal.timeout(8000)});
-      svc.callingPoints=res.ok?((await res.json()).callingPoints||[]):[];
-    }catch(e){ svc.callingPoints=[]; }
-  }));
+function classifyVXH(row){ return (row.dest||'').toLowerCase().includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line'; }
+
+async function fetchHighlightIds(crs){
+  const [rayRes,wboRes]=await Promise.allSettled([
+    fetch(`/api/trains?crs=${crs}&filterCrs=RAY&rows=150`,{signal:AbortSignal.timeout(10000)}).then(r=>r.json()),
+    fetch(`/api/trains?crs=${crs}&filterCrs=WBO&rows=150`,{signal:AbortSignal.timeout(10000)}).then(r=>r.json()),
+  ]);
+  const ids=new Set();
+  if(rayRes.status==='fulfilled'&&!rayRes.value.error) (rayRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
+  if(wboRes.status==='fulfilled'&&!wboRes.value.error) (wboRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
+  return ids;
 }
 
 function renderNRData(loc,nrData){
@@ -707,8 +703,7 @@ function renderNRData(loc,nrData){
     if(!byPlat[plat]) byPlat[plat]=[];
     byPlat[plat].push({ route:op, op, dest:svc.destination||'\u2014', mins, time:displayTime,
       note:isDelayed?`\u26a0 was ${std}`:null, plat,
-      callingPoints:svc.callingPoints||null, serviceId:svc.serviceId||null,
-      isHighlight:S.highlightActive[id]?isHighlight(svc.destination,svc.callingPoints):false });
+      isHighlight:S.highlightActive[id]?(S.highlightIds[id]||new Set()).has(svc.serviceId):false });
   });
 
   let alertHtml='';
@@ -782,14 +777,6 @@ function renderNRData(loc,nrData){
 
   return alertHtml+(cardsHtml||'<div class="state-row">No departures in the next 30 minutes</div>');
 }
-
-// ══════════════════════════════════════════════════════════════════
-// RAIL — RENDER
-// ══════════════════════════════════════════════════════════════════
-
-// Classify a service row into a dynamic group label (Vauxhall)
-function classifyVXH(row){ return (row.dest||'').toLowerCase().includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line'; }
-
 
 // ══════════════════════════════════════════════════════════════════
 // TUBE — fetch + render, writes only to #tube-{id}
