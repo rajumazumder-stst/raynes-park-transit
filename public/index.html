@@ -500,7 +500,6 @@ function buildPanelSkeleton(loc){
 }
 
 function buildBusSkeleton(loc){
-  if(!loc.buses) return '';
   if(loc.buses.flat)
     return `<div class="stop-grid two-col">${(loc.buses.stops||[]).map(stopCardHTML).join('')}</div>`;
   return (loc.buses.subgroups||[]).map(sg=>`
@@ -679,11 +678,6 @@ async function fetchHighlightIds(crs){
   const ids=new Set();
   if(rayRes.status==='fulfilled'&&!rayRes.value.error) (rayRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
   if(wboRes.status==='fulfilled'&&!wboRes.value.error) (wboRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
-  console.log('[highlight] fetchHighlightIds', crs, {
-    rayStatus:rayRes.status, rayError:rayRes.value?.error, rayCount:(rayRes.value?.services||[]).length,
-    wboStatus:wboRes.status, wboError:wboRes.value?.error, wboCount:(wboRes.value?.services||[]).length,
-    totalIds:ids.size, sampleIds:[...ids].slice(0,3)
-  });
   return ids;
 }
 
@@ -707,7 +701,6 @@ function renderNRData(loc,nrData){
     const op=ATOC_MAP[(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase()]||'';
     if(!byPlat[plat]) byPlat[plat]=[];
     const _hi=S.highlightActive[id]?(S.highlightIds[id]||new Set()).has(svc.serviceId):false;
-    if(S.highlightActive[id]) console.log('[highlight] svc', svc.std, svc.destination, 'serviceId:', svc.serviceId, 'match:', _hi);
     byPlat[plat].push({ route:op, op, dest:svc.destination||'\u2014', mins, time:displayTime,
       note:isDelayed?`\u26a0 was ${std}`:null, plat,
       isHighlight:_hi });
@@ -792,19 +785,21 @@ function renderNRData(loc,nrData){
 //   Wimbledon District: combined 4-platform card, platform number per row
 //   All others: separate card per platformName within each line
 // ══════════════════════════════════════════════════════════════════
+async function fetchLineArrivals(items){
+  const data=[];
+  await Promise.all(items.map(async(lc,i)=>{
+    const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
+    data[i]=res.ok?await res.json():[];
+  }));
+  return data;
+}
+
 async function fetchAndRenderTube(loc){
-  const id=loc.id;
-  const el=document.getElementById('tube-'+id);
+  const el=document.getElementById('tube-'+loc.id);
   if(!el) return;
   el.innerHTML=loadingHTML();
-  try{
-    const tubeData=[];
-    await Promise.all(loc.tube.map(async(lc,i)=>{
-      const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
-      tubeData[i]=res.ok?await res.json():[];
-    }));
-    el.innerHTML=renderTubeData(loc,tubeData);
-  }catch(e){ el.innerHTML=errorHTML('Could not load tube data'); }
+  try{ el.innerHTML=renderTubeData(loc,await fetchLineArrivals(loc.tube)); }
+  catch(e){ el.innerHTML=errorHTML('Could not load tube data'); }
 }
 
 function renderTubeData(loc,tubeData){
@@ -871,18 +866,11 @@ function renderTubeData(loc,tubeData){
 // lc.inboundOnly: filter to inbound direction only (Merton Park at South Wimbledon)
 // ══════════════════════════════════════════════════════════════════
 async function fetchAndRenderTram(loc){
-  const id=loc.id;
-  const el=document.getElementById('tram-'+id);
+  const el=document.getElementById('tram-'+loc.id);
   if(!el) return;
   el.innerHTML=loadingHTML();
-  try{
-    const tramData=[];
-    await Promise.all(loc.tram.map(async(lc,i)=>{
-      const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
-      tramData[i]=res.ok?await res.json():[];
-    }));
-    el.innerHTML=renderTramData(loc,tramData);
-  }catch(e){ el.innerHTML=errorHTML('Could not load tram data'); }
+  try{ el.innerHTML=renderTramData(loc,await fetchLineArrivals(loc.tram)); }
+  catch(e){ el.innerHTML=errorHTML('Could not load tram data'); }
 }
 
 function renderTramData(loc,tramData){

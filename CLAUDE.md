@@ -234,9 +234,10 @@ const S = {
 | `fetchAndRenderNR(loc)` | Fetches `/api/trains`, writes to `#nr-{id}` only |
 | `fetchHighlightIds(crs)` | Fetches `filterCrs=RAY` and `filterCrs=WBO` boards in parallel; returns `Set<serviceId>` |
 | `renderNRData(loc, nrData)` | Full NR render: dynamic routing, grouped/platform view, alert banner |
-| `fetchAndRenderTube(loc)` | Fetches TfL tube arrivals, writes to `#tube-{id}` only |
+| `fetchLineArrivals(items)` | Shared TfL fetch: maps array of `{line,stopId}` configs to arrival arrays |
+| `fetchAndRenderTube(loc)` | Fetches TfL tube arrivals via `fetchLineArrivals`, writes to `#tube-{id}` only |
 | `renderTubeData(loc, tubeData)` | Handles `mergeLines` (Blackfriars), Wimbledon combined, standard |
-| `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals, writes to `#tram-{id}` only |
+| `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals via `fetchLineArrivals`, writes to `#tram-{id}` only |
 | `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
 | `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only |
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
