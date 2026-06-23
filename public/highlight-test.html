@@ -92,7 +92,7 @@ async function fetchHighlights() {
       const res = await fetch(`/api/calling-points?serviceId=${encodeURIComponent(svc.serviceId)}`, {signal: AbortSignal.timeout(10000)});
       if (!res.ok) {
         const err = await res.json().catch(()=>({error:'non-JSON response'}));
-        svc._cpError = `HTTP ${res.status}: ${err.error||'unknown'}`;
+        svc._cpError = `HTTP ${res.status}: ${err.error||'unknown'}${err.detail ? ' — ' + err.detail : ''}`;
         svc._cpRaw = null;
         svc.callingPoints = [];
       } else {
@@ -151,12 +151,13 @@ function renderTable(showCp) {
       <td>${svc.platform||'?'}</td>
       <td>${dest}${destMatch ? ' <span class="badge">term</span>' : ''}</td>
       <td style="max-width:360px">${cpHtml || (showCp ? '' : '<span style="color:#555">—</span>')}</td>
+      <td style="color:#555;font-size:0.7rem;word-break:break-all;max-width:180px">${svc.serviceId||'—'}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('output').innerHTML = `
     <table>
-      <thead><tr><th>Std / Etd</th><th>Plat</th><th>Destination</th><th>Calling Points</th></tr></thead>
+      <thead><tr><th>Std / Etd</th><th>Plat</th><th>Destination</th><th>Calling Points</th><th>Service ID</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="4" style="color:#555">No services</td></tr>'}</tbody>
     </table>`;
 }
