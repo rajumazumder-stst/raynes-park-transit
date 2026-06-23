@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const url = `${LDBWS_BASE}/GetServiceDetails/${encodeURIComponent(serviceId)}`;
+  const url = `${LDBWS_BASE}/GetServiceDetails?serviceID=${encodeURIComponent(serviceId)}`;
 
   try {
     const apiRes = await fetch(url, {
