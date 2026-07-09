@@ -261,7 +261,7 @@ const LOCATIONS = [
       { label:'London Waterloo',      plats:['5','6'] },
       { label:'Thameslink',           plats:['9'] },
     ]},
-    tube:[{ line:'district', stopId:'940GZZLUWIM', label:'District Line', pillClass:'pill-tube-district' }],
+    tube:[{ line:'district', stopId:'940GZZLUWIM', label:'District Line', pillClass:'pill-tube-district', timetable:true }],
     tram:[{ line:'tram', stopId:'940GZZCRWMB', label:'London Trams', pillClass:'pill-tube-tramlink' }],
     buses:{ subgroups:[
       { id:'wim-returning', name:'Returning', defaultOpen:true, stops:[
@@ -381,6 +381,7 @@ const S = {
   highlightIds: {},     // locId → Set<serviceId> of RAY/WBO matching services
   viewMode: {},      // locId → 'grouped'|'platform'
   nrCache: {},       // locId → raw NR API response
+  ttCache: {},       // 'line|stopId' → raw TfL Timetable payload (static for the day), or null
 };
 
 // ── STOP MAP (O(1) key lookup, built eagerly from LOCATIONS) ────────────
@@ -444,6 +445,50 @@ function tflRow(a, pillClass){
     time:fmtTime(a.expectedArrival), note:a.towards||null, plat:null };
 }
 
+// Build the next scheduled departures from a TfL Timetable payload.
+// Used at termini, where the live Arrivals feed cannot supply a destination
+// (every prediction is a train arriving, so destinationName is the terminus).
+//
+// The two traps in this payload:
+//   • `stationIntervals[].id` is a STRING, `knownJourneys[].intervalId` is a NUMBER
+//   • `hour` runs past 24 for post-midnight journeys (hour 24 = 00:xx next day)
+//
+// Deliberately NOT joined to the live arrivals: TfL's timeToStation values are
+// front-loaded (6 trains predicted inside the 15-min window against 3 booked
+// departures), and Wimbledon's departures strictly alternate between two
+// destinations, so any slot-matching that drifts by one flips every label.
+function scheduledDepartures(tt, windowMins){
+  const route=tt&&tt.timetable&&tt.timetable.routes&&tt.timetable.routes[0];
+  if(!route||!route.schedules) return [];
+
+  const names={}; (tt.stops||[]).forEach(s=>{ names[s.id]=s.name; });
+  const clean=n=>(n||'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s*Underground Station$/,'').trim();
+
+  const destBy={};
+  (route.stationIntervals||[]).forEach(si=>{
+    const last=si.intervals&&si.intervals[si.intervals.length-1];
+    if(last) destBy[String(si.id)]=clean(names[last.stopId])||last.stopId;
+  });
+
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+  const gp=t=>parts.find(p=>p.type===t).value;
+  const dow=gp('weekday');
+  const nowMins=(+gp('hour'))*60+(+gp('minute'));
+
+  const wanted=dow==='Sun'?'Sunday':dow==='Sat'?'Saturdays and Public Holidays':'Monday - Friday';
+  const sched=route.schedules.find(s=>s.name===wanted)||route.schedules[0];
+  if(!sched||!sched.knownJourneys) return [];
+
+  return sched.knownJourneys.map(j=>{
+    const h=+j.hour, m=+j.minute;
+    let mins=h*60+m-nowMins;
+    if(mins<-180) mins+=1440;   // early-morning journey, clock has not wrapped yet
+    if(mins>1080) mins-=1440;   // hour>=24 journey, clock has already wrapped
+    const hh=String(h%24).padStart(2,'0'), mm=String(m).padStart(2,'0');
+    return { mins, time:`${hh}:${mm}`, dest:destBy[String(j.intervalId)]||'—' };
+  }).filter(d=>d.mins>=0&&d.mins<=windowMins).sort((a,b)=>a.mins-b.mins);
+}
+
 // Collapse duplicate predictions at a terminus.
 // TfL publishes one prediction per candidate platform for a train it has not yet
 // berthed, so a single train arrives four times at Wimbledon. A train already
@@ -480,9 +525,10 @@ function depRow(r, type){
   const l = minsLabel(r.mins);
   const hi = r.isHighlight||false;
   const pillClass = type==='bus' ? 'pill-bus' : (r.pillClass || OP_PILL[r.op] || '');
+  // r.platTBA opts a tube/tram/bus row into the TBA tag that NR rows get by default
   const platTag = r.plat
     ? `<div class="plat-tag">Plat ${r.plat}</div>`
-    : (type==='bus'||type==='tube'||type==='tram' ? '' : '<div class="plat-tag">TBA</div>');
+    : (r.platTBA || !(type==='bus'||type==='tube'||type==='tram') ? '<div class="plat-tag">TBA</div>' : '');
   return `<div class="departure-row${hi?' highlight':''}">
     <div><span class="route-pill ${pillClass}">${r.route||''}</span></div>
     <div class="dest-wrap">
@@ -862,15 +908,30 @@ async function fetchLineArrivals(items){
   return data;
 }
 
+// Timetables are static for the day, so fetch once per line+stop and cache.
+// A failure resolves to null: the arrivals card must still render.
+async function fetchTimetable(line,stopId){
+  const key=line+'|'+stopId;
+  if(key in S.ttCache) return S.ttCache[key];
+  try{
+    const res=await fetch(`/api/tfl?path=Line/${line}/Timetable/${stopId}`,{signal:AbortSignal.timeout(10000)});
+    S.ttCache[key]=res.ok?await res.json():null;
+  }catch(e){ S.ttCache[key]=null; }
+  return S.ttCache[key];
+}
 async function fetchAndRenderTube(loc){
   const el=document.getElementById('tube-'+loc.id);
   if(!el) return;
   el.innerHTML=loadingHTML();
-  try{ el.innerHTML=renderTubeData(loc,await fetchLineArrivals(loc.tube)); }
+  try{
+    const tt=loc.tube.map(lc=>lc.timetable?fetchTimetable(lc.line,lc.stopId):Promise.resolve(null));
+    const [arrivals,timetables]=await Promise.all([fetchLineArrivals(loc.tube),Promise.all(tt)]);
+    el.innerHTML=renderTubeData(loc,arrivals,timetables);
+  }
   catch(e){ el.innerHTML=errorHTML('Could not load tube data'); }
 }
 
-function renderTubeData(loc,tubeData){
+function renderTubeData(loc,tubeData,timetables){
   let html='';
   const crs=loc.nr?.crs;
   // Multi-line, same stop, not WAT: merge all arrivals by platformName (e.g. Blackfriars)
@@ -897,20 +958,39 @@ function renderTubeData(loc,tubeData){
   } else {
     loc.tube.forEach((lc,i)=>{
       const arrivals=tubeData[i]||[];
-      if(!arrivals.length) return;
-      // Wimbledon District line: terminus — dedupe per-platform duplicates, then
-      // show all platforms in one combined card. Platform tag appears only once
-      // TfL has berthed the train.
+      const isTerminus=lc.line==='district'&&crs==='WIM';
+      // A terminus still shows its scheduled departures when nothing is inbound
+      if(!arrivals.length&&!isTerminus) return;
+      // Wimbledon District line: terminus. Two cards, each internally truthful.
+      //
+      // "Arriving" — live, deduped. The destination column would read
+      // "Wimbledon Underground Station" on every row (these are arrivals INTO
+      // the terminus), so it shows TfL's currentLocation instead, which is real
+      // and actually useful here. Platform is TBA until TfL berths the train.
+      //
+      // "Departing" — scheduled, from the timetable. The only source of real
+      // destinations at this station. Not joined to the live rows; see
+      // scheduledDepartures() for why that join is unsafe.
       if(lc.line==='district'&&crs==='WIM'){
-        const rows=dedupeTerminusArrivals(arrivals).map(({arrival,plat})=>{
+        const arrRows=dedupeTerminusArrivals(arrivals).map(({arrival,plat})=>{
           const row=tflRow(arrival,lc.pillClass);
-          if(row) row.plat=plat?(plat.replace(/[^\d]/g,'')||null):null;
+          if(!row) return null;
+          row.dest=arrival.currentLocation||'—';
+          row.note=null;
+          row.plat=plat?(plat.replace(/[^\d]/g,'')||null):null;
+          row.platTBA=!row.plat;
           return row;
         }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
-        if(!rows.length) return;
+
         const chips=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))]
           .map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
-        html+=buildCard(lc.label, chips, rows, 'tube');
+        if(arrRows.length) html+=buildCard(lc.label+' — Arriving', chips, arrRows, 'tube', 'Live · position shown, platform assigned on arrival');
+
+        const depRows=scheduledDepartures(timetables&&timetables[i], 30)
+          .slice(0,6)
+          .map(d=>({ route:'', pillClass:lc.pillClass, dest:d.dest, mins:d.mins, time:d.time, note:null, plat:null }));
+        if(depRows.length) html+=buildCard(lc.label+' — Departing', null, depRows, 'tube', 'Scheduled · not adjusted for delays');
+        if(!arrRows.length&&!depRows.length) return;
       } else {
         // Standard: group by platformName, one card per direction/platform
         const byPlatName={};

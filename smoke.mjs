@@ -64,10 +64,14 @@ async function readConfig() {
     all(/line:'([^']+)',\s*stopId:'([^']+)'/g).map((m) => [`${m[1]}|${m[2]}`, { line: m[1], stopId: m[2] }]),
   ).values()];
 
+  // tube entries carrying `timetable:true` need the Timetable path in tfl.js's ALLOWED regex
+  const timetables = all(/line:'([^']+)',\s*stopId:'([^']+)'[^}]*timetable:\s*true/g)
+    .map((m) => ({ line: m[1], stopId: m[2] }));
+
   if (!naptans.length || !crs.length || !lines.length) {
     throw new Error('Parsed 0 of some config type from public/index.html — did the LOCATIONS format change?');
   }
-  return { naptans, crs, lines };
+  return { naptans, crs, lines, timetables };
 }
 
 // ── Checks ─────────────────────────────────────────────────────────────────
@@ -151,6 +155,32 @@ async function checkTrains(crsList) {
   });
 }
 
+// Terminus departure boards read Line/{line}/Timetable/{stopId}. That path is a
+// recent addition to tfl.js's ALLOWED regex, so a deployment predating it 400s.
+async function checkTimetables(items) {
+  if (!items.length) return;
+  console.log(`\nTimetables (${items.length} terminus board${items.length > 1 ? 's' : ''})`);
+  for (const { line, stopId } of items) {
+    try {
+      const { status, body } = await get(`/api/tfl?path=Line/${line}/Timetable/${stopId}`);
+      if (status === 400) return no(`${line} @ ${stopId} → 400; this deployment's tfl.js ALLOWED regex lacks the Timetable path`);
+      if (status !== 200) return no(`${line} @ ${stopId} → HTTP ${status}`);
+      const route = body?.timetable?.routes?.[0];
+      if (!route?.schedules?.length) return no(`${line} @ ${stopId} → no schedules in payload`);
+      if (!body?.stops?.length) return no(`${line} @ ${stopId} → no stops[]; destinations cannot be resolved to names`);
+
+      // scheduledDepartures() joins String(stationIntervals[].id) to knownJourneys[].intervalId
+      const ids = new Set((route.stationIntervals || []).map((si) => String(si.id)));
+      const used = new Set((route.schedules[0].knownJourneys || []).map((j) => String(j.intervalId)));
+      const orphan = [...used].filter((u) => !ids.has(u));
+      if (orphan.length) return no(`${line} @ ${stopId} → intervalIds ${orphan.join(',')} have no stationInterval`);
+      ok(`${line} @ ${stopId} → ${route.schedules.length} schedules, ${ids.size} destinations`);
+    } catch (e) {
+      no(`${line} @ ${stopId} threw: ${e.message}`);
+    }
+  }
+}
+
 // Highlight works by intersecting serviceIds from a filterCrs board against the
 // unfiltered board. Two ways that silently breaks: filterCrs gets ignored (every
 // row highlights), or the serviceIds don't correspond (nothing ever highlights).
@@ -210,11 +240,12 @@ try {
   process.exit(1);
 }
 
-const { naptans, crs, lines } = await readConfig();
+const { naptans, crs, lines, timetables } = await readConfig();
 
 await checkProxyGuard();
 await checkBusStops(naptans);
 await checkLines(lines);
+await checkTimetables(timetables);
 await checkTrains(crs);
 await checkFilterCrs();
 

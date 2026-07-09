@@ -1,5 +1,8 @@
 const TFL_BASE = 'https://api.tfl.gov.uk';
-const ALLOWED  = /^(StopPoint\/[^/]+\/Arrivals|StopPoint\/[^/]+\/Disruption|Line\/[^/]+\/Arrivals\/[^/]+)$/;
+// Anchored allow-list. This is the only thing stopping this proxy relaying
+// TFL_KEY to arbitrary URLs, so keep every alternative fully bounded ([^/]+)
+// and never introduce a `.*`.
+const ALLOWED  = /^(StopPoint\/[^/]+\/Arrivals|StopPoint\/[^/]+\/Disruption|Line\/[^/]+\/Arrivals\/[^/]+|Line\/[^/]+\/Timetable\/[^/]+)$/;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
