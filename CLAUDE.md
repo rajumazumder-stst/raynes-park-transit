@@ -208,8 +208,12 @@ All services remain visible regardless of highlight state — no rows are filter
 ```js
 const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
 const OP_PILL    = { SW:'pill-SW', TL:'pill-TL', SN:'pill-SN', SE:'pill-SE', LO:'pill-LO', GX:'pill-GX' };
-const ATOC_MAP   = { SW:'SW', TL:'TL', SN:'SN', SE:'SE', LO:'LO', GX:'GX', CS:'SW', VT:'SW', XR:'SW' };
+const OP_ALIAS   = { CS:'SW', VT:'SW', XR:'SW' };   // operators borrowing another's pill
 ```
+
+`opCode(svc)` resolves a service to its pill code: uppercase the operator field, follow
+`OP_ALIAS` if present, then return it only if `OP_PILL` has it (otherwise `''` → blank pill).
+Codes already in `OP_PILL` map to themselves and need no `OP_ALIAS` entry.
 
 ### Operator codes
 
@@ -258,6 +262,31 @@ const S = {
 
 ## Key functions
 
+### Shared plumbing
+
+Written once, used everywhere. Prefer these over hand-rolling a `fetch` or a `<div class="state-row">`.
+
+| Helper | Purpose |
+|--------|---------|
+| `apiJSON(url, ms)` | The only place a backend call is made: timeout, HTTP status check, and the `{error}` envelope both functions return. Throws `HTTP {status}` on a bad status. |
+| `tflGet(path, ms)` / `nrGet(crs, extra)` | Thin wrappers over `apiJSON` for the two backends |
+| `renderInto(elId, produce, errMsg)` | Owns a section's loading → content → error lifecycle |
+| `withSpin(btn, fn)` | Spins a `↻` button for the duration of an async action, including on throw |
+| `stateRow(text, danger)` | The one-line `state-row` markup; `errorHTML` is `stateRow(msg, true)` |
+| `ukTime(d)` | `Europe/London` `HH:MM`; used by the clock, `setUpdated` and `fmtTime` |
+| `platNum(name)` | Trailing platform number from a `platformName` (`"Eastbound - Platform 4"` → `"4"`) |
+| `byMins` | The `(a,b)=>a.mins-b.mins` sort comparator |
+| `realPlats(byPlat)` | Platform keys excluding the synthetic `_dyn_{label}` buckets |
+| `routeDynamic(byPlat, plats, labelOf)` | Moves rows off real platforms into `_dyn_{label}` buckets; used by both CLJ operator routing and Vauxhall destination routing |
+| `isHttpError(e)` | True for errors `apiJSON` raised from a bad status, as opposed to network/timeout failures |
+
+**`fetchLineArrivals` error semantics are deliberate.** A line the API rejects (4xx/5xx)
+contributes `[]`, so one dead line cannot blank a merged section like Blackfriars. A
+network failure or timeout still rejects, so a total outage renders "Could not load…"
+rather than the lie "No upcoming arrivals".
+
+### Everything else
+
 | Function | Purpose |
 |----------|---------|
 | `getAllBusStops(loc)` | Returns flat array of all bus stops for a location |
@@ -298,7 +327,9 @@ const S = {
 
 - **Wimbledon District line** — terminus. Rendered as **two cards**, each independently sourced and internally truthful. They are deliberately *not* joined.
 
-  **Arriving (live)** — deduped via `dedupeTerminusArrivals`. TfL emits one prediction *per candidate platform* for any train it has not yet berthed, so one train would otherwise appear four times (a sampled 22 raw predictions described only 7 trains). The destination column would read `"Wimbledon Underground Station"` on every row — these are arrivals *into* the terminus — so it shows `currentLocation` instead, which is real data and useful here. Platform reads `TBA` (via `row.platTBA`) until TfL berths the train.
+  **Arriving (live)** — deduped via `dedupeTerminusArrivals`. TfL emits one prediction *per candidate platform* for any train it has not yet berthed, so one train would otherwise appear four times (a sampled 22 raw predictions described only 7 trains). The destination column would read `"Wimbledon Underground Station"` on every row — these are arrivals *into* the terminus — so it shows `currentLocation` instead, which is real data and useful here.
+
+  A platform is shown **iff all of a train's predictions name the same platform**; otherwise the row reads `TBA` (via `row.platTBA`). Note this is a statement about the predictions, *not* about `currentLocation`: a train reporting `"At Platform"` has been observed still emitting predictions on two platforms at once (vehicle `002`, Platforms 1 and 4). Do not assume berthed implies a known platform.
 
   Clustering by prediction `id` alone is **not** sufficient: unassigned trains all carry `vehicleId: "000"` and their `id` hash collides across different trains. A platform repeating within one `id` marks the boundary between two trains.
 

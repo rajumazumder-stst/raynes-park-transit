@@ -85,7 +85,15 @@
 
 <script>
 // ── mirrors app config for CLJ ──────────────────────────────────────────────
-const ATOC_MAP = {'SW':'SW','TL':'TL','SN':'SN','SE':'SE','LO':'LO','GX':'GX','CS':'SW','VT':'SW','XR':'SW'};
+// Mirrors OP_PILL / OP_ALIAS in index.html: operators with their own pill, plus
+// those that borrow another's. Codes with a pill map to themselves.
+const OP_PILL  = ['SW','TL','SN','SE','LO','GX'];
+const OP_ALIAS = { CS:'SW', VT:'SW', XR:'SW' };
+function opCode(svc){
+  const raw=(svc.operatorCode||'').toUpperCase();
+  const code=OP_ALIAS[raw]||raw;
+  return OP_PILL.includes(code)?code:'';
+}
 const GROUPS = [
   { label:'South West Main Line',  plats:['9','11'] },
   { label:'London Overground',     plats:['1','2'] },
@@ -161,7 +169,7 @@ function render(data){
                    && svc.etd !== svc.std && /^\d{2}:\d{2}$/.test(svc.etd);
     const displayTime = (svc.etd && /^\d{2}:\d{2}$/.test(svc.etd)) ? svc.etd : (svc.std || '--:--');
     const mins = minsFromNow(displayTime);
-    const op = ATOC_MAP[(svc.operatorCode || '').toUpperCase()] || '';
+    const op = opCode(svc);
     const plat = svc.platform || null;
 
     let filterReason = null;

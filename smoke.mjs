@@ -53,6 +53,17 @@ async function pool(items, fn) {
   await Promise.all(workers);
 }
 
+// A thrown check is a failed check, not a dead run.
+const attempt = (label, fn) => fn().catch((e) => no(`${label} threw: ${e.message}`));
+
+// Shared expectation: HTTP 200 whose body is an array. Returns it, or null having reported why not.
+async function expectArray(path, label) {
+  const { status, body } = await get(path);
+  if (status !== 200) { no(`${label} → HTTP ${status}`); return null; }
+  if (!Array.isArray(body)) { no(`${label} → payload is not an array`); return null; }
+  return body;
+}
+
 // ── Parse config out of the single-file app ────────────────────────────────
 async function readConfig() {
   const html = await readFile(join(ROOT, 'public', 'index.html'), 'utf8');
@@ -86,49 +97,38 @@ async function checkProxyGuard() {
     ['path traversal', '/api/tfl?path=StopPoint/x/Arrivals/../../Line/Meta/Modes'],
     ['open relay attempt', '/api/tfl?path=https://example.com'],
   ];
-  await pool(bad, async ([label, path]) => {
-    try {
-      const { status } = await get(path);
-      status === 400
-        ? ok(`rejects ${label} → 400`)
-        : no(`${label} returned ${status}, expected 400 — proxy may be exploitable`);
-    } catch (e) {
-      no(`${label} threw: ${e.message}`);
-    }
-  });
+  await pool(bad, ([label, path]) => attempt(label, async () => {
+    const { status } = await get(path);
+    status === 400
+      ? ok(`rejects ${label} → 400`)
+      : no(`${label} returned ${status}, expected 400 — proxy may be exploitable`);
+  }));
 }
 
 async function checkBusStops(naptans) {
   console.log(`\nBus stops (${naptans.length} NaPTANs from LOCATIONS)`);
-  await pool(naptans, async (n) => {
-    try {
-      const { status, body } = await get(`/api/tfl?path=StopPoint/${n}/Arrivals`);
-      if (status !== 200) return no(`${n} → HTTP ${status}`);
-      if (!Array.isArray(body)) return no(`${n} → payload is not an array`);
-      if (body.length) return ok(`${n} → ${body.length} arrivals`);
+  await pool(naptans, (n) => attempt(n, async () => {
+    const body = await expectArray(`/api/tfl?path=StopPoint/${n}/Arrivals`, n);
+    if (!body) return;
+    if (body.length) return ok(`${n} → ${body.length} arrivals`);
 
-      // Zero arrivals: mirror fetchBusStop's closure lookup so an empty board
-      // is explained rather than silently green.
-      const d = await get(`/api/tfl?path=StopPoint/${n}/Disruption`);
-      const closure = Array.isArray(d.body) && d.body.find((x) => x.type === 'Closure');
-      wr(closure ? `${n} → 0 arrivals (CLOSED until ${closure.toDate || 'unknown'})` : `${n} → 0 arrivals, no closure record`);
-    } catch (e) {
-      no(`${n} threw: ${e.message}`);
-    }
-  });
+    // Zero arrivals: mirror fetchBusStop's closure lookup so an empty board
+    // is explained rather than silently green.
+    const d = await get(`/api/tfl?path=StopPoint/${n}/Disruption`);
+    const closure = Array.isArray(d.body) && d.body.find((x) => x.type === 'Closure');
+    wr(closure ? `${n} → 0 arrivals (CLOSED until ${closure.toDate || 'unknown'})` : `${n} → 0 arrivals, no closure record`);
+  }));
 }
 
 async function checkLines(lines) {
   console.log(`\nTube / tram (${lines.length} line+stop pairs)`);
-  await pool(lines, async ({ line, stopId }) => {
-    try {
-      const { status, body } = await get(`/api/tfl?path=Line/${line}/Arrivals/${stopId}`);
-      if (status !== 200) return no(`${line} @ ${stopId} → HTTP ${status}`);
-      if (!Array.isArray(body)) return no(`${line} @ ${stopId} → payload is not an array`);
-      body.length ? ok(`${line} @ ${stopId} → ${body.length} arrivals`) : wr(`${line} @ ${stopId} → 0 arrivals`);
-    } catch (e) {
-      no(`${line} @ ${stopId} threw: ${e.message}`);
-    }
+  await pool(lines, ({ line, stopId }) => {
+    const label = `${line} @ ${stopId}`;
+    return attempt(label, async () => {
+      const body = await expectArray(`/api/tfl?path=Line/${line}/Arrivals/${stopId}`, label);
+      if (!body) return;
+      body.length ? ok(`${label} → ${body.length} arrivals`) : wr(`${label} → 0 arrivals`);
+    });
   });
 }
 
@@ -136,23 +136,19 @@ async function checkLines(lines) {
 // through trainServices/generatedAt. The front end reads only that shape.
 async function checkTrains(crsList) {
   console.log(`\nNational Rail (${crsList.length} CRS codes)`);
-  await pool(crsList, async (crs) => {
-    try {
-      const { status, body } = await get(`/api/trains?crs=${crs}&rows=10`);
-      if (status !== 200) return no(`${crs} → HTTP ${status}${body?.error ? ` (${body.error})` : ''}`);
-      if (!body || typeof body !== 'object') return no(`${crs} → payload is not an object`);
-      if (!Array.isArray(body.services)) return no(`${crs} → missing \`services\` array; trains.js contract broken`);
-      if (!Array.isArray(body.messages)) return no(`${crs} → missing \`messages\` array; trains.js contract broken`);
-      if (!body.services.length) return wr(`${crs} → 0 services (none running in the 30-min window)`);
+  await pool(crsList, (crs) => attempt(crs, async () => {
+    const { status, body } = await get(`/api/trains?crs=${crs}&rows=10`);
+    if (status !== 200) return no(`${crs} → HTTP ${status}${body?.error ? ` (${body.error})` : ''}`);
+    if (!body || typeof body !== 'object') return no(`${crs} → payload is not an object`);
+    if (!Array.isArray(body.services)) return no(`${crs} → missing \`services\` array; trains.js contract broken`);
+    if (!Array.isArray(body.messages)) return no(`${crs} → missing \`messages\` array; trains.js contract broken`);
+    if (!body.services.length) return wr(`${crs} → 0 services (none running in the 30-min window)`);
 
-      // Highlight matches on serviceId; a row without one can never be flagged.
-      const noId = body.services.filter((s) => !s.serviceId).length;
-      if (noId) return no(`${crs} → ${noId}/${body.services.length} services missing serviceId`);
-      ok(`${crs} → ${body.services.length} services`);
-    } catch (e) {
-      no(`${crs} threw: ${e.message}`);
-    }
-  });
+    // Highlight matches on serviceId; a row without one can never be flagged.
+    const noId = body.services.filter((s) => !s.serviceId).length;
+    if (noId) return no(`${crs} → ${noId}/${body.services.length} services missing serviceId`);
+    ok(`${crs} → ${body.services.length} services`);
+  }));
 }
 
 // Terminus departure boards read Line/{line}/Timetable/{stopId}. That path is a
@@ -161,23 +157,22 @@ async function checkTimetables(items) {
   if (!items.length) return;
   console.log(`\nTimetables (${items.length} terminus board${items.length > 1 ? 's' : ''})`);
   for (const { line, stopId } of items) {
-    try {
+    const label = `${line} @ ${stopId}`;
+    await attempt(label, async () => {
       const { status, body } = await get(`/api/tfl?path=Line/${line}/Timetable/${stopId}`);
-      if (status === 400) return no(`${line} @ ${stopId} → 400; this deployment's tfl.js ALLOWED regex lacks the Timetable path`);
-      if (status !== 200) return no(`${line} @ ${stopId} → HTTP ${status}`);
+      if (status === 400) return no(`${label} → 400; this deployment's tfl.js ALLOWED regex lacks the Timetable path`);
+      if (status !== 200) return no(`${label} → HTTP ${status}`);
       const route = body?.timetable?.routes?.[0];
-      if (!route?.schedules?.length) return no(`${line} @ ${stopId} → no schedules in payload`);
-      if (!body?.stops?.length) return no(`${line} @ ${stopId} → no stops[]; destinations cannot be resolved to names`);
+      if (!route?.schedules?.length) return no(`${label} → no schedules in payload`);
+      if (!body?.stops?.length) return no(`${label} → no stops[]; destinations cannot be resolved to names`);
 
       // scheduledDepartures() joins String(stationIntervals[].id) to knownJourneys[].intervalId
       const ids = new Set((route.stationIntervals || []).map((si) => String(si.id)));
       const used = new Set((route.schedules[0].knownJourneys || []).map((j) => String(j.intervalId)));
       const orphan = [...used].filter((u) => !ids.has(u));
-      if (orphan.length) return no(`${line} @ ${stopId} → intervalIds ${orphan.join(',')} have no stationInterval`);
-      ok(`${line} @ ${stopId} → ${route.schedules.length} schedules, ${ids.size} destinations`);
-    } catch (e) {
-      no(`${line} @ ${stopId} threw: ${e.message}`);
-    }
+      if (orphan.length) return no(`${label} → intervalIds ${orphan.join(',')} have no stationInterval`);
+      ok(`${label} → ${route.schedules.length} schedules, ${ids.size} destinations`);
+    });
   }
 }
 
