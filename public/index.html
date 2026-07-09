@@ -280,6 +280,7 @@ const LOCATIONS = [
     tram:[{ line:'tram', stopId:'940GZZCRMTP', label:'Merton Park', pillClass:'pill-tube-tramlink', inboundOnly:true }],
     buses:{ flat:true, stops:[
       { key:'SW_SF', naptan:'490000216C', name:'South Wimbledon Station', sub:'Merton High Street – westbound', routes:'57 · 131 · 152 · 219 · 655 · N155', letter:'SF' },
+      { key:'SW_MD', naptan:'490002057D', name:'Merton Park Tram Stop',   sub:'Kingston Road – westbound',      routes:'152 · 655', letter:'MD' },
     ]}
   },
   { id:'colliers-wood', name:'Colliers Wood',
@@ -295,9 +296,8 @@ const LOCATIONS = [
       { label:'Shepperton · London Waterloo via Kingston', plats:['2'] },
     ]},
     buses:{ flat:true, stops:[
-      { key:'NOR_NZ', naptan:'4900018701N', name:'Gordon Road',     sub:'London Road – northeastbound', routes:'57 · 85 · 213 · 371', letter:'NZ' },
-      { key:'NOR_NC', naptan:'490010295E',  name:'Norbiton Church', sub:'London Road – eastbound',      routes:'57 · 85 · 213 · 371 · K2 · K3 · K4 · K5', letter:'' },
-      { key:'NOR_VH', naptan:'490014039E',  name:'Vicarage House',  sub:'Cambridge Road – eastbound',   routes:'131 · N87', letter:'' },
+      { key:'NOR_NZ', naptan:'4900018701N', name:'Gordon Road',    sub:'London Road – northeastbound', routes:'57 · 85 · 213 · 371', letter:'NZ' },
+      { key:'NOR_VH', naptan:'490014039E',  name:'Vicarage House', sub:'Cambridge Road – eastbound',   routes:'131 · N87', letter:'' },
     ]}
   },
   { id:'clapham-junction', name:'Clapham Junction',

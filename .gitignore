@@ -1,4 +1,6 @@
 *.code-workspace
 LDBWS_Documentation.md
 .env
+.env.local
+.vercel
 test-keys.js
