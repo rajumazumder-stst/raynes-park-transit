@@ -261,7 +261,7 @@ const LOCATIONS = [
       { label:'London Waterloo',      plats:['5','6'] },
       { label:'Thameslink',           plats:['9'] },
     ]},
-    tube:[{ line:'district', stopId:'940GZZLUWIM', label:'District Line', pillClass:'pill-tube-district' }],
+    tube:[{ line:'district', stopId:'940GZZLUWIM', label:'District Line', pillClass:'pill-tube-district', timetable:true }],
     tram:[{ line:'tram', stopId:'940GZZCRWMB', label:'London Trams', pillClass:'pill-tube-tramlink' }],
     buses:{ subgroups:[
       { id:'wim-returning', name:'Returning', defaultOpen:true, stops:[
@@ -280,6 +280,7 @@ const LOCATIONS = [
     tram:[{ line:'tram', stopId:'940GZZCRMTP', label:'Merton Park', pillClass:'pill-tube-tramlink', inboundOnly:true }],
     buses:{ flat:true, stops:[
       { key:'SW_SF', naptan:'490000216C', name:'South Wimbledon Station', sub:'Merton High Street – westbound', routes:'57 · 131 · 152 · 219 · 655 · N155', letter:'SF' },
+      { key:'SW_MD', naptan:'490002057D', name:'Merton Park Tram Stop',   sub:'Kingston Road – westbound',      routes:'152 · 655', letter:'MD' },
     ]}
   },
   { id:'colliers-wood', name:'Colliers Wood',
@@ -295,9 +296,8 @@ const LOCATIONS = [
       { label:'Shepperton · London Waterloo via Kingston', plats:['2'] },
     ]},
     buses:{ flat:true, stops:[
-      { key:'NOR_NZ', naptan:'4900018701N', name:'Gordon Road',     sub:'London Road – northeastbound', routes:'57 · 85 · 213 · 371', letter:'NZ' },
-      { key:'NOR_NC', naptan:'490010295E',  name:'Norbiton Church', sub:'London Road – eastbound',      routes:'57 · 85 · 213 · 371 · K2 · K3 · K4 · K5', letter:'' },
-      { key:'NOR_VH', naptan:'490014039E',  name:'Vicarage House',  sub:'Cambridge Road – eastbound',   routes:'131 · N87', letter:'' },
+      { key:'NOR_NZ', naptan:'4900018701N', name:'Gordon Road',    sub:'London Road – northeastbound', routes:'57 · 85 · 213 · 371', letter:'NZ' },
+      { key:'NOR_VH', naptan:'490014039E',  name:'Vicarage House', sub:'Cambridge Road – eastbound',   routes:'131 · N87', letter:'' },
     ]}
   },
   { id:'clapham-junction', name:'Clapham Junction',
@@ -372,8 +372,17 @@ const LOCATIONS = [
 ];
 
 const OP_PILL  = { SW:'pill-SW', TL:'pill-TL', SN:'pill-SN', SE:'pill-SE', LO:'pill-LO', GX:'pill-GX' };
-const ATOC_MAP = { 'SW':'SW','TL':'TL','SN':'SN','SE':'SE','LO':'LO','GX':'GX','CS':'SW','VT':'SW','XR':'SW' };
+// Operators that borrow another operator's pill. Codes already in OP_PILL map to
+// themselves and need no entry here.
+const OP_ALIAS = { CS:'SW', VT:'SW', XR:'SW' };
 const PLAT_FIRST = { VXH:['8'], CLJ:['11'], WIM:['8'], KNG:['3'] };
+
+// NR service → pill code, or '' when the operator has no pill.
+function opCode(svc){
+  const raw=(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase();
+  const code=OP_ALIAS[raw]||raw;
+  return OP_PILL[code]?code:'';
+}
 
 const S = {
   currentIdx: 0,
@@ -381,6 +390,7 @@ const S = {
   highlightIds: {},     // locId → Set<serviceId> of RAY/WBO matching services
   viewMode: {},      // locId → 'grouped'|'platform'
   nrCache: {},       // locId → raw NR API response
+  ttCache: {},       // 'line|stopId' → raw TfL Timetable payload (static for the day), or null
 };
 
 // ── STOP MAP (O(1) key lookup, built eagerly from LOCATIONS) ────────────
@@ -401,6 +411,10 @@ setInterval(updateClock,1000); updateClock();
 // ══════════════════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════════════════
+const UK_HHMM={timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'};
+function ukTime(d){ return d.toLocaleTimeString('en-GB',UK_HHMM); }
+const byMins=(a,b)=>a.mins-b.mins;
+function platNum(name){ const m=(name||'').match(/\d+[ab]?$/i); return m?m[0]:null; }
 function minsLabel(m){ if(m<=0) return{text:'Due',cls:'due'}; if(m<=3) return{text:m+' min',cls:'due'}; if(m<=8) return{text:m+' min',cls:'soon'}; return{text:m+' min',cls:'normal'}; }
 function minsFromNow(s){
   if(!s) return null;
@@ -411,37 +425,133 @@ function minsFromNow(s){
 }
 function fmtTime(s){
   if(!s) return '--:--';
-  if(s.includes('T')) return new Date(s).toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'});
-  return s.slice(0,5);
+  return s.includes('T') ? ukTime(new Date(s)) : s.slice(0,5);
 }
 function fmtDateTime(s){
   if(!s) return null;
-  return new Date(s).toLocaleString('en-GB',{timeZone:'Europe/London',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  return new Date(s).toLocaleString('en-GB',{...UK_HHMM,day:'2-digit',month:'short'});
 }
+function stateRow(text,danger){ return `<div class="state-row"${danger?' style="color:var(--accent-red)"':''}>${danger?'\u26a0 ':''}${text}</div>`; }
 function loadingHTML(){ return '<div class="state-row"><div class="loading-dots"><span></span><span></span><span></span></div></div>'; }
-function errorHTML(msg){ return `<div class="state-row" style="color:var(--accent-red)">\u26a0 ${msg}</div>`; }
+function errorHTML(msg){ return stateRow(msg,true); }
+
+// \u2500\u2500 Backend access \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Every call to our serverless functions goes through here: timeout, HTTP status
+// check, and the `{error}` envelope both functions return on failure.
+async function apiJSON(url,ms=10000){
+  const res=await fetch(url,{signal:AbortSignal.timeout(ms)});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const data=await res.json();
+  if(data&&data.error) throw new Error(data.error);
+  return data;
+}
+const tflGet=(path,ms)=>apiJSON(`/api/tfl?path=${path}`,ms);
+const nrGet=(crs,extra='')=>apiJSON(`/api/trains?crs=${crs}&rows=150${extra}`,12000);
+
+// Owns the loading \u2192 content \u2192 error lifecycle of one section container, so each
+// fetchAndRender* only has to say how to produce its HTML.
+async function renderInto(elId,produce,errMsg){
+  const el=document.getElementById(elId);
+  if(!el) return;
+  el.innerHTML=loadingHTML();
+  try{ el.innerHTML=await produce(); }
+  catch(e){ el.innerHTML=errorHTML(errMsg); }
+}
+async function withSpin(btn,fn){
+  if(btn) btn.classList.add('spinning');
+  try{ await fn(); } finally{ if(btn) btn.classList.remove('spinning'); }
+}
 // TfL flags temporarily closed bus stops as DisruptedPoint records with type 'Closure'.
 // Returns the active closure (latest reopen date) or null. Only meaningful when a stop has no arrivals.
 async function fetchBusClosure(naptan){
-  try{
-    const res=await fetch(`/api/tfl?path=StopPoint/${naptan}/Disruption`,{signal:AbortSignal.timeout(8000)});
-    if(!res.ok) return null;
-    const data=await res.json();
-    if(!Array.isArray(data)) return null;
-    const closures=data.filter(d=>d.type==='Closure');
-    if(!closures.length) return null;
-    return closures.sort((a,b)=>new Date(b.toDate||0)-new Date(a.toDate||0))[0];
-  }catch(e){ return null; }
+  const data=await tflGet(`StopPoint/${naptan}/Disruption`,8000).catch(()=>null);
+  if(!Array.isArray(data)) return null;
+  return data.filter(d=>d.type==='Closure')
+    .sort((a,b)=>new Date(b.toDate||0)-new Date(a.toDate||0))[0]||null;
 }
-function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+new Date().toLocaleTimeString('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}); }
+function setUpdated(){ document.getElementById('last-updated').innerHTML='<span class="status-dot"></span>Updated '+ukTime(new Date()); }
 function getLetter(stop){ return stop.letter!==undefined ? stop.letter : stop.key.split('_').pop(); }
-// Shared TfL tube/tram arrival → departure row. Returns null if outside the 15-minute window.
-// Callers may override `plat` afterwards (Wimbledon District, tram).
-function tflRow(a, pillClass){
+// Shared TfL arrival → departure row. Returns null outside the time window;
+// buses pass Infinity because they cap by row count instead.
+// Callers override `route`, `dest`, `note` and `plat` as needed.
+function tflRow(a, pillClass, windowMins=15){
   const mins=Math.round(a.timeToStation/60);
-  if(mins>15) return null;
+  if(mins>windowMins) return null;
   return { route:'', pillClass, dest:a.destinationName||a.towards||'—', mins,
     time:fmtTime(a.expectedArrival), note:a.towards||null, plat:null };
+}
+
+// Build the next scheduled departures from a TfL Timetable payload.
+// Used at termini, where the live Arrivals feed cannot supply a destination
+// (every prediction is a train arriving, so destinationName is the terminus).
+//
+// The two traps in this payload:
+//   • `stationIntervals[].id` is a STRING, `knownJourneys[].intervalId` is a NUMBER
+//   • `hour` runs past 24 for post-midnight journeys (hour 24 = 00:xx next day)
+//
+// Deliberately NOT joined to the live arrivals: TfL's timeToStation values are
+// front-loaded (6 trains predicted inside the 15-min window against 3 booked
+// departures), and Wimbledon's departures strictly alternate between two
+// destinations, so any slot-matching that drifts by one flips every label.
+function scheduledDepartures(tt, windowMins){
+  const route=tt&&tt.timetable&&tt.timetable.routes&&tt.timetable.routes[0];
+  if(!route||!route.schedules) return [];
+
+  const names={}; (tt.stops||[]).forEach(s=>{ names[s.id]=s.name; });
+  const clean=n=>(n||'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s*Underground Station$/,'').trim();
+
+  const destBy={};
+  (route.stationIntervals||[]).forEach(si=>{
+    const last=si.intervals&&si.intervals[si.intervals.length-1];
+    if(last) destBy[String(si.id)]=clean(names[last.stopId])||last.stopId;
+  });
+
+  const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date());
+  const gp=t=>parts.find(p=>p.type===t).value;
+  const dow=gp('weekday');
+  const nowMins=(+gp('hour'))*60+(+gp('minute'));
+
+  const wanted=dow==='Sun'?'Sunday':dow==='Sat'?'Saturdays and Public Holidays':'Monday - Friday';
+  const sched=route.schedules.find(s=>s.name===wanted)||route.schedules[0];
+  if(!sched||!sched.knownJourneys) return [];
+
+  return sched.knownJourneys.map(j=>{
+    const h=+j.hour, m=+j.minute;
+    let mins=h*60+m-nowMins;
+    if(mins<-180) mins+=1440;   // early-morning journey, clock has not wrapped yet
+    if(mins>1080) mins-=1440;   // hour>=24 journey, clock has already wrapped
+    const hh=String(h%24).padStart(2,'0'), mm=String(m).padStart(2,'0');
+    return { mins, time:`${hh}:${mm}`, dest:destBy[String(j.intervalId)]||'—' };
+  }).filter(d=>d.mins>=0&&d.mins<=windowMins).sort(byMins);
+}
+
+// Collapse duplicate predictions at a terminus.
+// TfL publishes one prediction per candidate platform for a train it has not yet
+// berthed, so a single train arrives four times at Wimbledon. A train already
+// `At Platform` gets exactly one prediction, on its real platform.
+// Clustering by `id` alone is not enough: unassigned trains share vehicleId '000'
+// and their `id` hash collides across different trains. A repeated platform within
+// one id therefore marks the boundary between two trains.
+// Returns `{ arrival, plat }` per train, earliest first. `plat` is null when TfL
+// has not committed to a platform.
+function dedupeTerminusArrivals(arrivals){
+  const byId={};
+  arrivals.forEach(a=>{ (byId[a.id]||(byId[a.id]=[])).push(a); });
+
+  const trains=[];
+  Object.values(byId).forEach(rows=>{
+    rows.sort((x,y)=>x.timeToStation-y.timeToStation);
+    let cluster=[], seen=new Set();
+    rows.forEach(r=>{
+      if(seen.has(r.platformName)){ trains.push(cluster); cluster=[]; seen=new Set(); }
+      cluster.push(r); seen.add(r.platformName);
+    });
+    if(cluster.length) trains.push(cluster);
+  });
+
+  return trains
+    .map(c=>({ arrival:c[0], plat:new Set(c.map(r=>r.platformName)).size===1 ? c[0].platformName : null }))
+    .sort((a,b)=>a.arrival.timeToStation-b.arrival.timeToStation);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -451,9 +561,10 @@ function depRow(r, type){
   const l = minsLabel(r.mins);
   const hi = r.isHighlight||false;
   const pillClass = type==='bus' ? 'pill-bus' : (r.pillClass || OP_PILL[r.op] || '');
+  // r.platTBA opts a tube/tram/bus row into the TBA tag that NR rows get by default
   const platTag = r.plat
     ? `<div class="plat-tag">Plat ${r.plat}</div>`
-    : (type==='bus'||type==='tube'||type==='tram' ? '' : '<div class="plat-tag">TBA</div>');
+    : (r.platTBA || !(type==='bus'||type==='tube'||type==='tram') ? '<div class="plat-tag">TBA</div>' : '');
   return `<div class="departure-row${hi?' highlight':''}">
     <div><span class="route-pill ${pillClass}">${r.route||''}</span></div>
     <div class="dest-wrap">
@@ -467,7 +578,7 @@ function depRow(r, type){
 }
 
 function renderRows(rows, type){
-  if(!rows.length) return '<div class="state-row">No upcoming departures</div>';
+  if(!rows.length) return stateRow('No upcoming departures');
   return rows.map(r=>depRow(r,type)).join('');
 }
 
@@ -602,10 +713,7 @@ function navStep(dir){
 }
 
 async function refreshCurrent(){
-  const btn = document.getElementById('main-refresh');
-  btn.classList.add('spinning');
-  await fetchAll(LOCATIONS[S.currentIdx].id);
-  btn.classList.remove('spinning');
+  await withSpin(document.getElementById('main-refresh'),()=>fetchAll(LOCATIONS[S.currentIdx].id));
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -629,36 +737,24 @@ async function fetchAll(id){
 async function fetchBusStop(key){
   const stop=STOP_MAP[key];
   if(!stop) return;
-  const el=document.getElementById('deps-'+key);
-  if(!el) return;
-  el.innerHTML=loadingHTML();
-  try{
-    const res=await fetch(`/api/tfl?path=StopPoint/${stop.naptan}/Arrivals`,{signal:AbortSignal.timeout(10000)});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.json();
+  await renderInto('deps-'+key,async()=>{
+    const data=await tflGet(`StopPoint/${stop.naptan}/Arrivals`);
     if(!Array.isArray(data)) throw new Error('Invalid response');
     // Per-stop destination filter: drop arrivals terminating at stop.filterDest (e.g. CLJ buses ending at "Clapham Junction").
     const arrivals=stop.filterDest ? data.filter(d=>d.destinationName!==stop.filterDest) : data;
     const rows=arrivals.sort((a,b)=>a.timeToStation-b.timeToStation).slice(0,6)
-      .map(d=>({ route:d.lineName, dest:d.destinationName||d.towards||'\u2014',
-        mins:Math.round(d.timeToStation/60), time:fmtTime(d.expectedArrival), note:null, plat:null }));
-    if(rows.length){ el.innerHTML=rows.map(r=>depRow(r,'bus')).join(''); return; }
+      .map(d=>{ const row=tflRow(d,null,Infinity); row.route=d.lineName; row.note=null; return row; });
+    if(rows.length) return rows.map(r=>depRow(r,'bus')).join('');
     // No departures — check whether the stop is flagged closed before showing the neutral empty state.
     const closure=await fetchBusClosure(stop.naptan);
-    if(closure){
-      const until=fmtDateTime(closure.toDate);
-      el.innerHTML=`<div class="state-row" style="color:var(--accent-red)">⚠ Stop closed${until?` until ${until}`:''}</div>`;
-    }else{
-      el.innerHTML='<div class="state-row">No upcoming departures</div>';
-    }
-  }catch(e){ el.innerHTML=errorHTML('Could not load'); }
+    if(!closure) return stateRow('No upcoming departures');
+    const until=fmtDateTime(closure.toDate);
+    return stateRow(`Stop closed${until?` until ${until}`:''}`,true);
+  },'Could not load');
 }
 
 async function refreshBusStop(key){
-  const btn=document.getElementById('btn-'+key);
-  if(btn) btn.classList.add('spinning');
-  await fetchBusStop(key);
-  if(btn) btn.classList.remove('spinning');
+  await withSpin(document.getElementById('btn-'+key),()=>fetchBusStop(key));
   setUpdated();
 }
 
@@ -693,30 +789,37 @@ async function toggleHighlight(id){
 // ══════════════════════════════════════════════════════════════════
 async function fetchAndRenderNR(loc){
   const id=loc.id;
-  const el=document.getElementById('nr-'+id);
-  if(!el) return;
-  el.innerHTML=loadingHTML();
-  try{
-    const res=await fetch(`/api/trains?crs=${loc.nr.crs}&rows=150`,{signal:AbortSignal.timeout(12000)});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.json();
-    if(data.error) throw new Error(data.error);
+  await renderInto('nr-'+id,async()=>{
+    const data=await nrGet(loc.nr.crs);
     S.nrCache[id]=data;
     if(S.highlightActive[id]) S.highlightIds[id]=await fetchHighlightIds(loc.nr.crs);
-    el.innerHTML=renderNRData(loc,data);
-  }catch(e){ el.innerHTML=errorHTML('Could not load train data'); }
+    return renderNRData(loc,data);
+  },'Could not load train data');
 }
 
 function classifyVXH(row){ return (row.dest||'').toLowerCase().includes('london waterloo') ? 'London Waterloo' : 'Waterloo-Reading line'; }
 
+// Real platform keys, excluding the synthetic '_dyn_{label}' buckets.
+const realPlats=byPlat=>Object.keys(byPlat).filter(p=>!p.startsWith('_'));
+
+// Move every row off the given platforms into a '_dyn_{label}' bucket, so a group
+// can collect rows that no fixed platform list would have matched. Used for both
+// operator routing (CLJ plat 17) and destination routing (Vauxhall).
+function routeDynamic(byPlat,plats,labelOf){
+  plats.forEach(plat=>{
+    (byPlat[plat]||[]).forEach(row=>{
+      const key='_dyn_'+labelOf(row);
+      (byPlat[key]||(byPlat[key]=[])).push({...row,plat});
+    });
+    delete byPlat[plat];
+  });
+}
+
+// Union of serviceIds calling at RAY or WBO. A failed board contributes nothing.
 async function fetchHighlightIds(crs){
-  const [rayRes,wboRes]=await Promise.allSettled([
-    fetch(`/api/trains?crs=${crs}&filterCrs=RAY&rows=150`,{signal:AbortSignal.timeout(10000)}).then(r=>r.json()),
-    fetch(`/api/trains?crs=${crs}&filterCrs=WBO&rows=150`,{signal:AbortSignal.timeout(10000)}).then(r=>r.json()),
-  ]);
+  const boards=await Promise.allSettled(['RAY','WBO'].map(to=>nrGet(crs,`&filterCrs=${to}`)));
   const ids=new Set();
-  if(rayRes.status==='fulfilled'&&!rayRes.value.error) (rayRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
-  if(wboRes.status==='fulfilled'&&!wboRes.value.error) (wboRes.value.services||[]).forEach(s=>ids.add(s.serviceId));
+  boards.forEach(b=>{ if(b.status==='fulfilled') (b.value.services||[]).forEach(s=>ids.add(s.serviceId)); });
   return ids;
 }
 
@@ -737,7 +840,7 @@ function renderNRData(loc,nrData){
     const displayTime=(etd&&/^\d{2}:\d{2}$/.test(etd))?etd:(std||'--:--');
     const mins=minsFromNow(displayTime);
     if(mins===null||mins<-2||mins>30) return;
-    const op=ATOC_MAP[(svc.operatorCode||svc.operator||svc.atocCode||'').toUpperCase()]||'';
+    const op=opCode(svc);
     if(!byPlat[plat]) byPlat[plat]=[];
     const _hi=S.highlightActive[id]?(S.highlightIds[id]||new Set()).has(svc.serviceId):false;
     byPlat[plat].push({ route:op, op, dest:svc.destination||'\u2014', mins, time:displayTime,
@@ -756,28 +859,11 @@ function renderNRData(loc,nrData){
 
   if(nr.groups&&mode==='grouped'){
     // 1. Dynamic platform routing by operator (e.g. CLJ plat 17)
-    if(nr.dynamicPlatforms){
-      Object.entries(nr.dynamicPlatforms).forEach(([plat,opMap])=>{
-        (byPlat[plat]||[]).forEach(row=>{
-          const label=opMap[row.op]||'Other';
-          if(!byPlat['_dyn_'+label]) byPlat['_dyn_'+label]=[];
-          byPlat['_dyn_'+label].push({...row,plat});
-        });
-        delete byPlat[plat];
-      });
-    }
+    if(nr.dynamicPlatforms) routeDynamic(byPlat,Object.keys(nr.dynamicPlatforms),row=>nr.dynamicPlatforms[row.plat][row.op]||'Other');
     // 2. Dynamic destination routing (Vauxhall)
     if(nr.dynamicGroups&&nr.crs==='VXH'){
       const fixed=nr.groups.flatMap(g=>g.plats);
-      Object.keys(byPlat).filter(p=>!p.startsWith('_')).forEach(plat=>{
-        if(fixed.includes(plat)) return;
-        (byPlat[plat]||[]).forEach(row=>{
-          const label=classifyVXH(row);
-          if(!byPlat['_dyn_'+label]) byPlat['_dyn_'+label]=[];
-          byPlat['_dyn_'+label].push({...row,plat});
-        });
-        delete byPlat[plat];
-      });
+      routeDynamic(byPlat,realPlats(byPlat).filter(p=>!fixed.includes(p)),classifyVXH);
     }
     // 3. Render groups in defined order
     nr.groups.forEach(grp=>{
@@ -786,7 +872,7 @@ function renderNRData(loc,nrData){
       const dk='_dyn_'+grp.label;
       if(byPlat[dk]){ rows.push(...byPlat[dk]); delete byPlat[dk]; }
       if(!rows.length) return;
-      rows.sort((a,b)=>a.mins-b.mins);
+      rows.sort(byMins);
       const chipPlats=grp.plats.length?grp.plats:[...new Set(rows.map(r=>r.plat).filter(Boolean))];
       cardsHtml+=buildCard(grp.label,platChips(chipPlats),rows,'train');
     });
@@ -794,7 +880,7 @@ function renderNRData(loc,nrData){
 
   // Remaining / by-platform view
   const firstPlat=PLAT_FIRST[nr.crs]||[];
-  Object.keys(byPlat).filter(p=>!p.startsWith('_')).sort((a,b)=>{
+  realPlats(byPlat).sort((a,b)=>{
     if(a==='TBA') return 1; if(b==='TBA') return -1;
     const ai=firstPlat.indexOf(a),bi=firstPlat.indexOf(b);
     if(ai>=0&&bi<0) return -1; if(bi>=0&&ai<0) return 1;
@@ -804,17 +890,17 @@ function renderNRData(loc,nrData){
     if(isNaN(na)) return 1; if(isNaN(nb)) return -1;
     return na-nb;
   }).forEach(plat=>{
-    const rows=byPlat[plat].sort((a,b)=>a.mins-b.mins);
+    const rows=byPlat[plat].sort(byMins);
     if(!rows.length) return;
     cardsHtml+=buildCard(
       plat==='TBA'?'Platform TBA':'Platform '+plat,
-      `<span class="plat-chip">Plat ${plat}</span>`,
+      platChips([plat]),
       rows,'train',
       plat==='TBA'?'Platform not yet assigned':null
     );
   });
 
-  return alertHtml+(cardsHtml||'<div class="state-row">No departures in the next 30 minutes</div>');
+  return alertHtml+(cardsHtml||stateRow('No departures in the next 30 minutes'));
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -824,24 +910,33 @@ function renderNRData(loc,nrData){
 //   Wimbledon District: combined 4-platform card, platform number per row
 //   All others: separate card per platformName within each line
 // ══════════════════════════════════════════════════════════════════
-async function fetchLineArrivals(items){
-  const data=[];
-  await Promise.all(items.map(async(lc,i)=>{
-    const res=await fetch(`/api/tfl?path=Line/${lc.line}/Arrivals/${lc.stopId}`,{signal:AbortSignal.timeout(10000)});
-    data[i]=res.ok?await res.json():[];
-  }));
-  return data;
+// A line the API rejects (4xx/5xx) contributes no arrivals, so one dead line cannot
+// blank a merged section like Blackfriars. A network failure or timeout still rejects,
+// so a total outage is reported as an error rather than shown as "no arrivals".
+const isHttpError=e=>/^HTTP \d+$/.test(e.message);
+function fetchLineArrivals(items){
+  return Promise.all(items.map(lc=>
+    tflGet(`Line/${lc.line}/Arrivals/${lc.stopId}`).catch(e=>{ if(isHttpError(e)) return []; throw e; })));
 }
 
+// Timetables are static for the day, so fetch once per line+stop and cache.
+// A failure caches null: the arrivals card must still render.
+async function fetchTimetable(line,stopId){
+  const key=line+'|'+stopId;
+  if(!(key in S.ttCache)) S.ttCache[key]=await tflGet(`Line/${line}/Timetable/${stopId}`).catch(()=>null);
+  return S.ttCache[key];
+}
 async function fetchAndRenderTube(loc){
-  const el=document.getElementById('tube-'+loc.id);
-  if(!el) return;
-  el.innerHTML=loadingHTML();
-  try{ el.innerHTML=renderTubeData(loc,await fetchLineArrivals(loc.tube)); }
-  catch(e){ el.innerHTML=errorHTML('Could not load tube data'); }
+  await renderInto('tube-'+loc.id,async()=>{
+    const [arrivals,timetables]=await Promise.all([
+      fetchLineArrivals(loc.tube),
+      Promise.all(loc.tube.map(lc=>lc.timetable?fetchTimetable(lc.line,lc.stopId):null)),
+    ]);
+    return renderTubeData(loc,arrivals,timetables);
+  },'Could not load tube data');
 }
 
-function renderTubeData(loc,tubeData){
+function renderTubeData(loc,tubeData,timetables){
   let html='';
   const crs=loc.nr?.crs;
   // Multi-line, same stop, not WAT: merge all arrivals by platformName (e.g. Blackfriars)
@@ -861,25 +956,45 @@ function renderTubeData(loc,tubeData){
     const dirOrder=p=>p.toLowerCase().includes('east')?0:p.toLowerCase().includes('west')?1:2;
     Object.entries(merged).sort(([a],[b])=>dirOrder(a)-dirOrder(b)||a.localeCompare(b)).forEach(([pName,rows])=>{
       if(!rows.length) return;
-      rows.sort((a,b)=>a.mins-b.mins);
+      rows.sort(byMins);
       const m=pName.match(/eastbound|westbound/i);
       html+=buildCard(m?m[0].charAt(0).toUpperCase()+m[0].slice(1).toLowerCase():pName, null, rows, 'tube');
     });
   } else {
     loc.tube.forEach((lc,i)=>{
       const arrivals=tubeData[i]||[];
-      if(!arrivals.length) return;
-      // Wimbledon District line: all 4 platforms in one combined card
-      if(lc.line==='district'&&crs==='WIM'){
-        const rows=arrivals.map(a=>{
-          const row=tflRow(a,lc.pillClass);
-          if(row) row.plat=a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null;
+      const isTerminus=lc.line==='district'&&crs==='WIM';
+      // A terminus still shows its scheduled departures when nothing is inbound
+      if(!arrivals.length&&!isTerminus) return;
+      // Wimbledon District line: terminus. Two cards, each internally truthful.
+      //
+      // "Arriving" — live, deduped. The destination column would read
+      // "Wimbledon Underground Station" on every row (these are arrivals INTO
+      // the terminus), so it shows TfL's currentLocation instead, which is real
+      // and actually useful here. Platform is TBA until TfL berths the train.
+      //
+      // "Departing" — scheduled, from the timetable. The only source of real
+      // destinations at this station. Not joined to the live rows; see
+      // scheduledDepartures() for why that join is unsafe.
+      if(isTerminus){
+        const arrRows=dedupeTerminusArrivals(arrivals).map(({arrival,plat})=>{
+          const row=tflRow(arrival,lc.pillClass);
+          if(!row) return null;
+          row.dest=arrival.currentLocation||'—';
+          row.note=null;
+          row.plat=platNum(plat);
+          row.platTBA=!row.plat;
           return row;
-        }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
-        if(!rows.length) return;
-        const chips=[...new Set(arrivals.map(a=>a.platformName).filter(Boolean))]
-          .map(p=>{const m=p.match(/\d+[ab]?$/i);return`<span class="plat-chip">Plat ${m?m[0]:p}</span>`;}).join('');
-        html+=buildCard(lc.label, chips, rows, 'tube');
+        }).filter(Boolean).sort(byMins);
+
+        const chips=platChips([...new Set(arrivals.map(a=>a.platformName).filter(Boolean))].map(p=>platNum(p)||p));
+        if(arrRows.length) html+=buildCard(lc.label+' — Arriving', chips, arrRows, 'tube', 'Live · position shown, platform assigned on arrival');
+
+        const depRows=scheduledDepartures(timetables&&timetables[i], 30)
+          .slice(0,6)
+          .map(d=>({ route:'', pillClass:lc.pillClass, dest:d.dest, mins:d.mins, time:d.time, note:null, plat:null }));
+        if(depRows.length) html+=buildCard(lc.label+' — Departing', null, depRows, 'tube', 'Scheduled · not adjusted for delays');
+        if(!arrRows.length&&!depRows.length) return;
       } else {
         // Standard: group by platformName, one card per direction/platform
         const byPlatName={};
@@ -891,13 +1006,13 @@ function renderTubeData(loc,tubeData){
         });
         Object.entries(byPlatName).sort(([a],[b])=>a.localeCompare(b)).forEach(([pName,rows])=>{
           if(!rows.length) return;
-          rows.sort((a,b)=>a.mins-b.mins);
+          rows.sort(byMins);
           html+=buildCard(lc.label, null, rows, 'tube', pName);
         });
       }
     });
   }
-  return html||'<div class="state-row">No upcoming arrivals</div>';
+  return html||stateRow('No upcoming arrivals');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -905,11 +1020,7 @@ function renderTubeData(loc,tubeData){
 // lc.inboundOnly: filter to inbound direction only (Merton Park at South Wimbledon)
 // ══════════════════════════════════════════════════════════════════
 async function fetchAndRenderTram(loc){
-  const el=document.getElementById('tram-'+loc.id);
-  if(!el) return;
-  el.innerHTML=loadingHTML();
-  try{ el.innerHTML=renderTramData(loc,await fetchLineArrivals(loc.tram)); }
-  catch(e){ el.innerHTML=errorHTML('Could not load tram data'); }
+  await renderInto('tram-'+loc.id,async()=>renderTramData(loc,await fetchLineArrivals(loc.tram)),'Could not load tram data');
 }
 
 function renderTramData(loc,tramData){
@@ -918,14 +1029,15 @@ function renderTramData(loc,tramData){
     let arrivals=tramData[i]||[];
     if(lc.inboundOnly) arrivals=arrivals.filter(a=>a.direction==='inbound');
     const rows=arrivals.map(a=>{
+      // Tram platforms are named ("Eastbound Platform"), not numbered — strip the word.
       const row=tflRow(a,lc.pillClass);
       if(row) row.plat=a.platformName?(a.platformName.replace(/Platform\s*/i,'').trim()||null):null;
       return row;
-    }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
+    }).filter(Boolean).sort(byMins);
     if(!rows.length) return;
     html+=buildCard(lc.label, null, rows, 'tram');
   });
-  return html||'<div class="state-row">No upcoming tram arrivals</div>';
+  return html||stateRow('No upcoming tram arrivals');
 }
 
 // ══════════════════════════════════════════════════════════════════
