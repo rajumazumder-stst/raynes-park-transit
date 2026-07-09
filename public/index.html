@@ -444,6 +444,35 @@ function tflRow(a, pillClass){
     time:fmtTime(a.expectedArrival), note:a.towards||null, plat:null };
 }
 
+// Collapse duplicate predictions at a terminus.
+// TfL publishes one prediction per candidate platform for a train it has not yet
+// berthed, so a single train arrives four times at Wimbledon. A train already
+// `At Platform` gets exactly one prediction, on its real platform.
+// Clustering by `id` alone is not enough: unassigned trains share vehicleId '000'
+// and their `id` hash collides across different trains. A repeated platform within
+// one id therefore marks the boundary between two trains.
+// Returns `{ arrival, plat }` per train, earliest first. `plat` is null when TfL
+// has not committed to a platform.
+function dedupeTerminusArrivals(arrivals){
+  const byId={};
+  arrivals.forEach(a=>{ (byId[a.id]||(byId[a.id]=[])).push(a); });
+
+  const trains=[];
+  Object.values(byId).forEach(rows=>{
+    rows.sort((x,y)=>x.timeToStation-y.timeToStation);
+    let cluster=[], seen=new Set();
+    rows.forEach(r=>{
+      if(seen.has(r.platformName)){ trains.push(cluster); cluster=[]; seen=new Set(); }
+      cluster.push(r); seen.add(r.platformName);
+    });
+    if(cluster.length) trains.push(cluster);
+  });
+
+  return trains
+    .map(c=>({ arrival:c[0], plat:new Set(c.map(r=>r.platformName)).size===1 ? c[0].platformName : null }))
+    .sort((a,b)=>a.arrival.timeToStation-b.arrival.timeToStation);
+}
+
 // ══════════════════════════════════════════════════════════════════
 // DEPARTURE RENDERERS  (single unified pipeline)
 // ══════════════════════════════════════════════════════════════════
@@ -869,11 +898,13 @@ function renderTubeData(loc,tubeData){
     loc.tube.forEach((lc,i)=>{
       const arrivals=tubeData[i]||[];
       if(!arrivals.length) return;
-      // Wimbledon District line: all 4 platforms in one combined card
+      // Wimbledon District line: terminus — dedupe per-platform duplicates, then
+      // show all platforms in one combined card. Platform tag appears only once
+      // TfL has berthed the train.
       if(lc.line==='district'&&crs==='WIM'){
-        const rows=arrivals.map(a=>{
-          const row=tflRow(a,lc.pillClass);
-          if(row) row.plat=a.platformName?(a.platformName.replace(/[^\d]/g,'')||null):null;
+        const rows=dedupeTerminusArrivals(arrivals).map(({arrival,plat})=>{
+          const row=tflRow(arrival,lc.pillClass);
+          if(row) row.plat=plat?(plat.replace(/[^\d]/g,'')||null):null;
           return row;
         }).filter(Boolean).sort((a,b)=>a.mins-b.mins);
         if(!rows.length) return;
