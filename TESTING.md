@@ -117,8 +117,32 @@ Exit code is `0` when nothing failed, `1` otherwise, so it drops straight into C
 git push -u origin add-merton-park-stop
 ```
 
-Vercel builds a **preview deployment** on its own URL. Production is untouched. Find
-the URL without leaving the terminal:
+### The test URL is static
+
+The `preview` branch always deploys to the same address:
+
+```
+https://raynes-park-transit-git-preview-rajumazumder-ststs-projects.vercel.app
+```
+
+Vercel points this alias at the **latest commit on the branch**, so bookmark it once
+and every push refreshes it in place. Per-commit URLs still exist alongside it, which
+is what you want when comparing two builds.
+
+**Branch names for this alias must be ≤ 11 characters.** The alias is
+`{project}-git-{branch}-{scope}.vercel.app`, and the subdomain label is capped at 63
+characters. `raynes-park-transit` (19) + `-git-` (5) + `-` + `rajumazumder-ststs-projects`
+(27) already spends 52, leaving 11. A longer branch name still deploys, but Vercel
+truncates the alias and you are back to hunting per-commit URLs.
+
+Also note: pushing an **existing commit** to a new branch does not mint that branch's
+alias — Vercel skips the build because the SHA is already deployed. The branch needs at
+least one commit of its own.
+
+### Finding a per-commit URL
+
+Vercel builds a **preview deployment** on its own URL for every commit. Production is
+untouched. Find the URL without leaving the terminal:
 
 ```bash
 SHA=$(git rev-parse HEAD)

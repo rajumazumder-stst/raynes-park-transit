@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Smoke test for the data layer. Run against a local `vercel dev` server or a
-// preview URL:
+// Smoke test for the data layer. Run against a local `vercel dev` server, the
+// static preview URL, production, or any explicit URL:
 //
-//   node smoke.mjs                                  # http://localhost:3000
-//   node smoke.mjs https://rpt-git-branch.vercel.app
+//   node smoke.mjs              # http://localhost:3000
+//   node smoke.mjs preview      # the static `preview` branch alias
+//   node smoke.mjs prod         # the live app
+//   node smoke.mjs https://...  # anything else
 //
 // Reads the LOCATIONS config straight out of public/index.html, so it always
 // tests exactly the stops the app is configured to render. Exits 1 on failure.
@@ -16,7 +18,16 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
+// Named targets, so nobody has to paste a per-commit URL. `preview` is a Vercel
+// branch alias: it always points at the newest commit on the `preview` branch.
+const TARGETS = {
+  local: 'http://localhost:3000',
+  preview: 'https://raynes-park-transit-git-preview-rajumazumder-ststs-projects.vercel.app',
+  prod: 'https://raynes-park-transit.vercel.app',
+};
+
+const arg = process.argv[2] || 'local';
+const BASE = (TARGETS[arg] || arg).replace(/\/$/, '');
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const CONCURRENCY = 4;
 

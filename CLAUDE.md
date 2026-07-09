@@ -6,6 +6,7 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 
 - **GitHub**: https://github.com/rajumazumder-stst/raynes-park-transit
 - **Live app**: https://raynes-park-transit.vercel.app
+- **Test app**: https://raynes-park-transit-git-preview-rajumazumder-ststs-projects.vercel.app — the `preview` branch, always at its latest commit
 - **Deploy**: merge to `main` → Vercel auto-redeploys in ~30 s
 
 ### Deployment policy
@@ -17,7 +18,8 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 This is not a style preference — treat it as a hard constraint:
 
 - Never commit to `main`. Never merge a PR without being asked to.
-- Work on a branch; push it to get a Vercel preview URL; hand that URL over for review.
+- Work on the `preview` branch (or another branch of **≤ 11 characters**, so Vercel's
+  static alias fits); push it and hand the test URL over for review.
 - "Update the app" means *update the preview*. Only an explicit approval ("merge it",
   "ship it", "push to live") authorises touching `main`.
 - If a task seems to require deploying live, stop and ask.
