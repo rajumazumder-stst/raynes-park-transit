@@ -5,9 +5,15 @@ that **`main` is the only branch that can do that** — everything else gets its
 throwaway URL.
 
 ```
-feature branch ──push──► Vercel preview URL ──smoke test──► PR ──merge──► main ──► production
-                              (isolated)                                      (live)
+feature branch ──push──► Vercel preview URL ──smoke test──► review ──approval──► merge ──► production
+                              (isolated)                                                      (live)
 ```
+
+> **Deployment policy.** Unless explicitly stated otherwise, every change ships to a
+> preview first. The live app is updated only after the repository owner has reviewed
+> that preview and approved it. "Update the app" means *update the preview*. The merge
+> step needs an explicit go-ahead — it is never implied by the request that produced
+> the change.
 
 ---
 

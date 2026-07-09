@@ -7,7 +7,22 @@ A single-file PWA displaying live bus, National Rail, tube, and tram departures 
 - **GitHub**: https://github.com/rajumazumder-stst/raynes-park-transit
 - **Live app**: https://raynes-park-transit.vercel.app
 - **Deploy**: merge to `main` → Vercel auto-redeploys in ~30 s
-- **Testing**: never commit to `main` directly. Branch → `npx vercel dev` → `node smoke.mjs` → push for a Vercel preview URL → PR. See `TESTING.md`.
+
+### Deployment policy
+
+> **Unless explicitly stated otherwise, every change ships to a test version first.
+> The live app is updated only after the repository owner has reviewed the preview
+> and approved it.**
+
+This is not a style preference — treat it as a hard constraint:
+
+- Never commit to `main`. Never merge a PR without being asked to.
+- Work on a branch; push it to get a Vercel preview URL; hand that URL over for review.
+- "Update the app" means *update the preview*. Only an explicit approval ("merge it",
+  "ship it", "push to live") authorises touching `main`.
+- If a task seems to require deploying live, stop and ask.
+
+Process detail, env-var scoping and rollback: see `TESTING.md`.
 
 ## File structure
 
@@ -16,7 +31,7 @@ public/index.html          Single-file PWA (all HTML + CSS + JS)
 public/clj-test.html       Diagnostic page — CLJ departures with grouped view, filter debug, and stats
 public/highlight-test.html Test page — verifies filterCrs approach and RAY/WBO highlight detection
 public/naptan-test.html    Test page — lists all bus-stop NaPTANs; lookup box + "Test All" sweep showing stop details, closures, and arrivals within 30 min
-api/tfl.js                 Vercel serverless function — TfL proxy: arrivals (buses, tube, tram) + stop-point disruptions
+api/tfl.js                 Vercel serverless function — TfL proxy: arrivals (buses, tube, tram), stop-point disruptions, line timetables
 api/trains.js              Vercel serverless function — National Rail REST proxy (GetDepartureBoard)
 smoke.mjs                  Smoke test — parses LOCATIONS from index.html, exercises both APIs; takes a base URL, exits 1 on failure
 TESTING.md                 Branch → preview → PR process; env-var scoping; rollback
@@ -42,12 +57,13 @@ vercel.json                Routing config (do not modify)
 
   There is no `trainServices` or `generatedAt` in the response. `destination` is flattened from `destination[0].locationName`; `serviceId` is LDBWS's `serviceID` (note the casing change) and is what highlight matching keys on.
 
-- `tfl.js` allows exactly three path shapes; anything else → 400:
+- `tfl.js` allows exactly four path shapes; anything else → 400:
   - `StopPoint/{naptan}/Arrivals`
   - `StopPoint/{naptan}/Disruption`
   - `Line/{line}/Arrivals/{stopId}`
+  - `Line/{line}/Timetable/{stopId}` — scheduled departures, used by terminus boards
 
-  The `ALLOWED` regex is anchored and is the only thing preventing the proxy from relaying `$TFL_KEY` to arbitrary URLs. Adding a path shape (e.g. `Line/{line}/Timetable/{stopId}`) requires editing it.
+  The `ALLOWED` regex is anchored and is the only thing preventing the proxy from relaying `$TFL_KEY` to arbitrary URLs. If you add a path shape, keep every alternative fully bounded with `[^/]+` and never introduce `.*`; then confirm it still rejects `Line/Meta/Modes`, traversal (`.../../...`), extra path segments, and absolute URLs.
 
 ---
 
@@ -104,7 +120,9 @@ Single unified array. Each entry:
   },
 
   tube: [                        // omit if no tube; array to support multiple lines
-    { line, stopId, label, pillClass }
+    { line, stopId, label, pillClass, timetable? }
+    // timetable: true — also fetch Line/{line}/Timetable/{stopId} and render a
+    //                   scheduled-departures card (terminus stations only)
   ],
 
   tram: [                        // omit if no tram
@@ -232,6 +250,7 @@ const S = {
   highlightIds:   {},    // locId → Set<serviceId> of services calling at RAY or WBO
   viewMode:       {},    // locId → 'grouped' | 'platform'
   nrCache:        {},    // locId → raw NR API response
+  ttCache:        {},    // 'line|stopId' → raw TfL Timetable payload, or null on failure
 };
 ```
 
@@ -255,8 +274,10 @@ const S = {
 | `renderNRData(loc, nrData)` | Full NR render: dynamic routing, grouped/platform view, alert banner |
 | `fetchLineArrivals(items)` | Shared TfL fetch: maps array of `{line,stopId}` configs to arrival arrays |
 | `fetchAndRenderTube(loc)` | Fetches TfL tube arrivals via `fetchLineArrivals`, writes to `#tube-{id}` only |
-| `renderTubeData(loc, tubeData)` | Handles `mergeLines` (Blackfriars), Wimbledon combined + deduped, standard |
+| `fetchTimetable(line, stopId)` | Fetches `Line/{line}/Timetable/{stopId}` once and caches in `S.ttCache` (static for the day); resolves `null` on failure so the arrivals card still renders |
+| `renderTubeData(loc, tubeData, timetables)` | Handles `mergeLines` (Blackfriars), Wimbledon terminus (two cards), standard |
 | `dedupeTerminusArrivals(arrivals)` | Collapses TfL's per-platform duplicate predictions at a terminus into one entry per train; returns `{arrival, plat}[]` sorted by `timeToStation`, `plat === null` when TfL has not assigned one |
+| `scheduledDepartures(tt, windowMins)` | Timetable payload → `{mins, time, dest}[]` within the window. Handles the string/number `intervalId` mismatch and `hour >= 24` (post-midnight) |
 | `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals via `fetchLineArrivals`, writes to `#tram-{id}` only |
 | `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
 | `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only; drops arrivals matching `stop.filterDest`; if no arrivals, checks closure via `fetchBusClosure` |
@@ -275,9 +296,15 @@ const S = {
 
 ## Special rendering rules
 
-- **Wimbledon District line** — terminus. All 4 platforms combined into one card, deduped via `dedupeTerminusArrivals`. TfL emits one prediction *per candidate platform* for any train it has not yet berthed, so one train would otherwise appear four times (a sampled 22 raw predictions described only 7 trains). A platform tag renders only when TfL has committed to a platform — i.e. the train reports `currentLocation: "At Platform"` and yields a single prediction. En-route trains show no platform.
+- **Wimbledon District line** — terminus. Rendered as **two cards**, each independently sourced and internally truthful. They are deliberately *not* joined.
+
+  **Arriving (live)** — deduped via `dedupeTerminusArrivals`. TfL emits one prediction *per candidate platform* for any train it has not yet berthed, so one train would otherwise appear four times (a sampled 22 raw predictions described only 7 trains). The destination column would read `"Wimbledon Underground Station"` on every row — these are arrivals *into* the terminus — so it shows `currentLocation` instead, which is real data and useful here. Platform reads `TBA` (via `row.platTBA`) until TfL berths the train.
 
   Clustering by prediction `id` alone is **not** sufficient: unassigned trains all carry `vehicleId: "000"` and their `id` hash collides across different trains. A platform repeating within one `id` marks the boundary between two trains.
+
+  **Departing (scheduled)** — `scheduledDepartures()` over `Line/district/Timetable/940GZZLUWIM`, 30-min window, capped at 6 rows. The only source of real destinations at this station. Captioned "not adjusted for delays". Renders even when nothing is inbound.
+
+  **Why they are not joined.** A hybrid (live times + destination from the nearest timetable slot) was prototyped and rejected. TfL's `timeToStation` values are front-loaded: sampled three times, 6 trains are predicted inside the 15-minute window against only 3 booked departures, converging only over ~45 min. Departures from Wimbledon strictly alternate Tower Hill / Edgware Road, so a slot assignment drifting by one flips *every* destination at once — plausible-looking and wrong. Do not re-attempt this without new evidence that arrival predictions are reliable.
 - **Blackfriars tube** — District + Circle merged into shared Eastbound/Westbound cards by `platformName` (`mergeLines` path)
 - **London Waterloo tube** — 4 lines rendered independently by `platformName` (not merged, because `crs === 'WAT'` skips `mergeLines`)
 - **Vauxhall NR** — platforms not in `['6','8']` routed dynamically by destination: contains "London Waterloo" → London Waterloo group, others → Waterloo-Reading line group
@@ -287,7 +314,13 @@ const S = {
 - **Bus stops with no letter** — `letter: ''` renders an empty gradient badge
 - **Closed bus stops** — when a stop returns no arrivals, `fetchBusStop` checks `StopPoint/{naptan}/Disruption`. A `type:"Closure"` record renders a red "Stop closed until {date}" notice; stops with no arrivals and no closure record keep the neutral "No upcoming departures" state. TfL only flags temporary hooded closures this way.
 
-- **Stale NaPTANs** — a stop that returns no arrivals *and* no `Closure` record during service hours is usually a retired NaPTAN, not a closed stop. TfL keeps such IDs in its reference data (`status: true`, still listed in `Line/{line}/StopPoints`, still in `Route/Sequence`, still with a full `Timetable`) long after the live prediction feed has stopped publishing against them. `490010295E` ("Norbiton Church") was one: its real route list never matched the config's, because those routes had moved to `490013664C1` 176 m east. It was removed rather than repointed. Cross-check any suspect stop against its neighbours before blaming the API.
+- **Stale NaPTANs — HYPOTHESIS, not established fact.** Further investigation pending.
+
+  **Observed** (verified against the API): `490010295E` ("Norbiton Church") returned zero arrivals via every endpoint shape, while all seven bus stops within 350 m returned between 2 and 13. It carried `status: true`, an empty `/Disruption` array, membership in all five of its lines' `StopPoints`, a place in line 57's operational `Route/Sequence`, and a full `Timetable` of 103 journeys. Its actual line list (57, 85, K2, K3, K4) did not match the config's (57, 85, 213, 371, K2, K3, K4, K5); those routes serve `490013664C1` ("Tiffin School / London Road") 176 m east, which is live.
+
+  **Inferred, and unproven**: that TfL retires a stop from the live prediction feed while leaving it in reference data, and that this stop was renamed or relocated. The API never states this. The distance and name change are suggestive, not conclusive; a single stop is not a pattern.
+
+  **Do not yet treat "no arrivals + no `Closure` record" as diagnostic of a stale NaPTAN.** Cross-check against neighbouring stops and, where possible, against TfL's own journey planner or on-street signage. Revisit when more instances have been gathered.
 
 ---
 
@@ -331,15 +364,9 @@ On init, `index.html` fetches its own `Last-Modified` header via a `HEAD` reques
 
 ## Known pending improvements
 
-1. **Wimbledon District line destinations** — investigated; not an app bug and not fixable from the current endpoint.
+1. **Stale NaPTAN hypothesis** — see *Stale NaPTANs* above. One instance (`490010295E`) is not a pattern. Gather further examples and confirm the mechanism before the rule is relied upon, or before building any automated detection on top of it.
 
-   Every prediction at Wimbledon is an *arrival into* the terminus, so `destinationName` correctly reads `"Wimbledon Underground Station"`. `?direction=inbound|outbound` both return 0 rows, and `StopPoint/{id}/ArrivalDepartures` rejects the District line outright. The same feed is fully populated at non-terminus stations (Victoria shows Ealing Broadway, Upminster, Richmond).
-
-   Real departure destinations exist only in `Line/district/Timetable/940GZZLUWIM`, reachable via `stationIntervals[].intervals[-1].stopId` keyed by `knownJourneys[].intervalId`. Two traps: `stationIntervals[].id` is a **string** while `intervalId` is an **int**, and the path is not in `tfl.js`'s `ALLOWED` regex — this would be the project's first backend change.
-
-   Open design question: live arrivals (accurate timings, no destinations) vs scheduled departures (real destinations, no live adjustment).
-
-2. **"Check Front of Train"** — trains already berthed at Wimbledon carry no `destinationName`, so `tflRow`'s `destinationName || towards` fallback renders TfL's literal placeholder string as the destination, and again as the note. Worth suppressing when the destination work above is done.
+2. **"Check Front of Train" at Putney** — some arrivals carry no `destinationName`, so `tflRow`'s `destinationName || towards` fallback renders TfL's literal placeholder as the destination, and again as the note. Wimbledon no longer shows this (its Arriving card overrides `dest` with `currentLocation`), but **Putney does**: `Line/district/Arrivals/940GZZLUEPY` had 2 of 4 arrivals in this state when last checked. Blackfriars is unaffected — its instances are Hammersmith & City trains, and the app fetches only `district` and `circle` there.
 
 3. **Operator codes at Clapham Junction** — `operatorCode` field not always populated by NR API; can cause incorrect pill or routing for platform 17
 
@@ -353,8 +380,9 @@ On init, `index.html` fetches its own `Last-Modified` header via a `HEAD` reques
 
 ## Working conventions
 
-- **Never commit to `main`.** `main` is the production branch; merging to it deploys. Work on a branch, push for a preview URL, open a PR. Full process in `TESTING.md`.
-- **Verify before pushing**: `node smoke.mjs` against `npx vercel dev`. It parses `LOCATIONS` out of `index.html`, so new stops are covered automatically. Exits 1 on failure.
+- **Never commit to `main`, and never merge without explicit approval.** See *Deployment policy* above. Work on a branch, push for a preview URL, hand it over for review.
+- **Verify before pushing**: `node smoke.mjs` against `npx vercel dev`. It parses `LOCATIONS` out of `index.html`, so new stops and any `timetable:true` tube stop are covered automatically. Exits 1 on failure.
+- **A `smoke.mjs` timetable failure against production is expected** until the branch adding a new `tfl.js` path is merged — the deployed backend simply doesn't have it yet.
 - **Config-only changes** (adding stops, reordering, relabelling): edit the `LOCATIONS` array — and `naptan-test.html`, which keeps its own copy (see known issue 6).
 - **Logic changes**: identify the relevant function and explain what is changing and why before editing.
 - **File destinations**: `index.html` → `public/`, `trains.js` / `tfl.js` → `api/`
