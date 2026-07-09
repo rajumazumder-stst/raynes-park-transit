@@ -20,6 +20,11 @@ const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const CONCURRENCY = 4;
 
+// Vercel preview deployments sit behind Deployment Protection (SSO), which 302s
+// any unauthenticated request. Set a Protection Bypass token to test them:
+//   Vercel → Settings → Deployment Protection → Protection Bypass for Automation
+const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+
 const pass = [];
 const warn = [];
 const fail = [];
@@ -29,10 +34,14 @@ const wr = (m) => { warn.push(m); console.log(`  \x1b[33m!\x1b[0m ${m}`); };
 const no = (m) => { fail.push(m); console.log(`  \x1b[31m✗\x1b[0m ${m}`); };
 
 async function get(path) {
-  const res = await fetch(BASE + path, { signal: AbortSignal.timeout(15000) });
+  const res = await fetch(BASE + path, {
+    signal: AbortSignal.timeout(15000),
+    redirect: 'manual', // so an SSO bounce surfaces as a 3xx rather than an HTML page
+    headers: BYPASS ? { 'x-vercel-protection-bypass': BYPASS } : {},
+  });
   let body = null;
-  try { body = await res.json(); } catch { /* non-JSON body */ }
-  return { status: res.status, body };
+  try { body = await res.json(); } catch { /* non-JSON or empty body */ }
+  return { status: res.status, body, location: res.headers.get('location') };
 }
 
 // Run tasks with a bounded worker pool so we don't trip TfL/NR rate limits.
@@ -172,10 +181,30 @@ async function checkFilterCrs() {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
-console.log(`Smoke test → ${BASE}`);
+console.log(`Smoke test → ${BASE}${BYPASS ? '  (protection bypass set)' : ''}`);
 
+// Preflight. Without this, a protected preview turns every check into a bogus
+// failure and buries the one thing you actually need to know.
 try {
-  await get('/api/tfl');
+  const { status, location } = await get('/api/tfl');
+  if (status >= 300 && status < 400 && /vercel\.com\/sso-api/.test(location || '')) {
+    console.error(
+      `\n\x1b[31m${BASE} is behind Vercel Deployment Protection.\x1b[0m\n` +
+      `Every request 302s to Vercel SSO, so the API cannot be tested from a script.\n\n` +
+      `The deployment is fine — open it in a browser signed in to your Vercel account.\n` +
+      `To smoke-test it from here, create a bypass token:\n` +
+      `  Vercel → Settings → Deployment Protection → Protection Bypass for Automation\n` +
+      `then re-run with:\n` +
+      `  VERCEL_AUTOMATION_BYPASS_SECRET=<token> node smoke.mjs ${BASE}\n\n` +
+      `Or test the same code locally, where no protection applies:\n` +
+      `  npx vercel dev  &&  node smoke.mjs\n`,
+    );
+    process.exit(1);
+  }
+  if (status !== 400) {
+    console.error(`\n\x1b[31m${BASE}/api/tfl returned ${status}, expected 400.\x1b[0m Is this a deployment of this project?`);
+    process.exit(1);
+  }
 } catch (e) {
   console.error(`\n\x1b[31mCannot reach ${BASE}\x1b[0m — is \`npx vercel dev\` running?\n  ${e.message}`);
   process.exit(1);

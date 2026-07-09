@@ -111,16 +111,37 @@ Exit code is `0` when nothing failed, `1` otherwise, so it drops straight into C
 git push -u origin add-merton-park-stop
 ```
 
-Vercel builds a **preview deployment** at a URL like
-`https://raynes-park-transit-git-add-merton-park-stop-<scope>.vercel.app`.
-Production is untouched. Open a PR and the URL is posted as a comment.
-
-Run the smoke test against the deployed preview — this is the one that matters,
-because it exercises the real serverless runtime and the real Preview env vars:
+Vercel builds a **preview deployment** on its own URL. Production is untouched. Find
+the URL without leaving the terminal:
 
 ```bash
-node smoke.mjs https://raynes-park-transit-git-add-merton-park-stop-<scope>.vercel.app
+SHA=$(git rev-parse HEAD)
+gh api "repos/rajumazumder-stst/raynes-park-transit/deployments?sha=$SHA" --jq '.[].id' \
+  | xargs -I{} gh api "repos/rajumazumder-stst/raynes-park-transit/deployments/{}/statuses" \
+      --jq '.[] | "\(.state)  \(.environment)  \(.environment_url)"'
 ```
+
+**Preview URLs are behind Vercel Deployment Protection.** Opening one in a browser
+signed in to the Vercel account works normally — that's how you eyeball a change. But
+every *unauthenticated* request 302s to `vercel.com/sso-api`, so a script can't test
+it out of the box. `smoke.mjs` detects this and says so rather than emitting dozens of
+bogus failures.
+
+Two ways to smoke-test a preview:
+
+```bash
+# 1. Bypass token — Vercel → Settings → Deployment Protection
+#                 → Protection Bypass for Automation
+VERCEL_AUTOMATION_BYPASS_SECRET=<token> node smoke.mjs <preview-url>
+
+# 2. Or just test locally, where no protection applies
+npx vercel dev && node smoke.mjs
+```
+
+Note that `smoke.mjs` reads the stop list from your **local** `public/index.html` while
+calling the **deployed** API. That's deliberate: both functions are stateless proxies,
+so this tells you whether the config you are about to ship works against the live
+upstreams.
 
 ### 5. Eyeball it
 
