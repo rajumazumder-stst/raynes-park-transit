@@ -414,8 +414,8 @@ On init, `index.html` fetches its own `Last-Modified` header via a `HEAD` reques
 ## Working conventions
 
 - **Never commit to `main`, and never merge without explicit approval.** See *Deployment policy* above. Work on a branch, push for a preview URL, hand it over for review.
-- **Verify before pushing**: `node smoke.mjs` against `npx vercel dev`. It parses `LOCATIONS` out of `index.html`, so new stops and any `timetable:true` tube stop are covered automatically. Exits 1 on failure.
-- **A `smoke.mjs` timetable failure against production is expected** until the branch adding a new `tfl.js` path is merged — the deployed backend simply doesn't have it yet.
+- **Verify before pushing**: `node smoke.mjs` against `npx vercel dev`. It parses `LOCATIONS` out of `index.html`, so new stops and any `timetable:true` tube stop are covered automatically. Exits 1 on failure. Named targets: `node smoke.mjs [local|preview|prod|<url>]`.
+- **A new `tfl.js` path fails `smoke.mjs` against a deployment that predates it.** The test calls the *deployed* backend while reading the *local* config, so widening `ALLOWED` shows up as a failure against `prod` until the change is merged. That is the check working, not a defect.
 - **Config-only changes** (adding stops, reordering, relabelling): edit the `LOCATIONS` array — and `naptan-test.html`, which keeps its own copy (see known issue 6).
 - **Logic changes**: identify the relevant function and explain what is changing and why before editing.
 - **File destinations**: `index.html` → `public/`, `trains.js` / `tfl.js` → `api/`
