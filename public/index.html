@@ -262,7 +262,7 @@ const LOCATIONS = [
       { label:'Thameslink',           plats:['9'] },
     ]},
     tube:[{ line:'district', stopId:'940GZZLUWIM', label:'District Line', pillClass:'pill-tube-district', timetable:true }],
-    tram:[{ line:'tram', stopId:'940GZZCRWMB', label:'London Trams', pillClass:'pill-tube-tramlink' }],
+    tram:[{ line:'tram', stopId:'940GZZCRWMB', label:'London Trams', pillClass:'pill-tube-tramlink', timetable:true, timetableDir:'inbound' }],
     buses:{ subgroups:[
       { id:'wim-returning', name:'Returning', defaultOpen:true, stops:[
         { key:'WIM_M', naptan:'490006987M', name:'Francis Grove',         sub:'Worple Road – southwestbound',         routes:'57 · 131 · N87' },
@@ -277,7 +277,7 @@ const LOCATIONS = [
   },
   { id:'south-wimbledon', name:'South Wimbledon',
     tube:[{ line:'northern', stopId:'940GZZLUSWN', label:'Northern Line', pillClass:'pill-tube-northern' }],
-    tram:[{ line:'tram', stopId:'940GZZCRMTP', label:'Merton Park', pillClass:'pill-tube-tramlink', inboundOnly:true }],
+    tram:[{ line:'tram', stopId:'940GZZCRMTP', label:'Merton Park', pillClass:'pill-tube-tramlink', inboundOnly:true, timetable:true, timetableDir:'inbound' }],
     buses:{ flat:true, stops:[
       { key:'SW_SF', naptan:'490000216C', name:'South Wimbledon Station', sub:'Merton High Street – westbound', routes:'57 · 131 · 152 · 219 · 655 · N155', letter:'SF' },
       { key:'SW_MD', naptan:'490002057D', name:'Merton Park Tram Stop',   sub:'Kingston Road – westbound',      routes:'152 · 655', letter:'MD' },
@@ -498,7 +498,7 @@ function scheduledDepartures(tt, windowMins){
   if(!route||!route.schedules) return [];
 
   const names={}; (tt.stops||[]).forEach(s=>{ names[s.id]=s.name; });
-  const clean=n=>(n||'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s*Underground Station$/,'').trim();
+  const clean=n=>(n||'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s*Underground Station$/,'').replace(/\s*Tram Stop$/,'').trim();
 
   const destBy={};
   (route.stationIntervals||[]).forEach(si=>{
@@ -921,9 +921,12 @@ function fetchLineArrivals(items){
 
 // Timetables are static for the day, so fetch once per line+stop and cache.
 // A failure caches null: the arrivals card must still render.
-async function fetchTimetable(line,stopId){
-  const key=line+'|'+stopId;
-  if(!(key in S.ttCache)) S.ttCache[key]=await tflGet(`Line/${line}/Timetable/${stopId}`).catch(()=>null);
+async function fetchTimetable(line,stopId,direction){
+  const key=line+'|'+stopId+(direction?'|'+direction:'');
+  // `&direction=` rides as a sibling query param to `path` on /api/tfl; it stays
+  // out of `path` itself so tfl.js's ALLOWED allow-list still matches. Required for
+  // branch/terminus stops (trams) that TfL won't resolve without a direction.
+  if(!(key in S.ttCache)) S.ttCache[key]=await tflGet(`Line/${line}/Timetable/${stopId}`+(direction?`&direction=${direction}`:'')).catch(()=>null);
   return S.ttCache[key];
 }
 async function fetchAndRenderTube(loc){
@@ -1020,10 +1023,16 @@ function renderTubeData(loc,tubeData,timetables){
 // lc.inboundOnly: filter to inbound direction only (Merton Park at South Wimbledon)
 // ══════════════════════════════════════════════════════════════════
 async function fetchAndRenderTram(loc){
-  await renderInto('tram-'+loc.id,async()=>renderTramData(loc,await fetchLineArrivals(loc.tram)),'Could not load tram data');
+  await renderInto('tram-'+loc.id,async()=>{
+    const [arrivals,timetables]=await Promise.all([
+      fetchLineArrivals(loc.tram),
+      Promise.all(loc.tram.map(lc=>lc.timetable?fetchTimetable(lc.line,lc.stopId,lc.timetableDir):null)),
+    ]);
+    return renderTramData(loc,arrivals,timetables);
+  },'Could not load tram data');
 }
 
-function renderTramData(loc,tramData){
+function renderTramData(loc,tramData,timetables){
   let html='';
   loc.tram.forEach((lc,i)=>{
     let arrivals=tramData[i]||[];
@@ -1034,8 +1043,20 @@ function renderTramData(loc,tramData){
       if(row) row.plat=a.platformName?(a.platformName.replace(/Platform\s*/i,'').trim()||null):null;
       return row;
     }).filter(Boolean).sort(byMins);
-    if(!rows.length) return;
-    html+=buildCard(lc.label, null, rows, 'tram');
+    // Live arrivals card. At a terminus (Wimbledon) TfL emits no predictions for
+    // departing trams, so with a timetable configured this can be empty while the
+    // scheduled Departing card below is full; hence the split labels.
+    if(rows.length) html+=buildCard(lc.timetable?lc.label+' — Arriving':lc.label, null, rows, 'tram');
+
+    // Scheduled departures (timetable-driven). Destinations come straight from the
+    // timetable — no live-times/timetable join — so the branch-alternation trap that
+    // sinks a hybrid at Wimbledon District does not apply. Booked times, not delay-adjusted.
+    if(lc.timetable){
+      const depRows=scheduledDepartures(timetables&&timetables[i], 30)
+        .slice(0,6)
+        .map(d=>({ route:'', pillClass:lc.pillClass, dest:d.dest, mins:d.mins, time:d.time, note:null, plat:null }));
+      if(depRows.length) html+=buildCard(lc.label+' — Departing', null, depRows, 'tram', 'Scheduled · not adjusted for delays');
+    }
   });
   return html||stateRow('No upcoming tram arrivals');
 }

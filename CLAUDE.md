@@ -63,9 +63,11 @@ vercel.json                Routing config (do not modify)
   - `StopPoint/{naptan}/Arrivals`
   - `StopPoint/{naptan}/Disruption`
   - `Line/{line}/Arrivals/{stopId}`
-  - `Line/{line}/Timetable/{stopId}` — scheduled departures, used by terminus boards
+  - `Line/{line}/Timetable/{stopId}` — scheduled departures, used by terminus and branch boards
 
   The `ALLOWED` regex is anchored and is the only thing preventing the proxy from relaying `$TFL_KEY` to arbitrary URLs. If you add a path shape, keep every alternative fully bounded with `[^/]+` and never introduce `.*`; then confirm it still rejects `Line/Meta/Modes`, traversal (`.../../...`), extra path segments, and absolute URLs.
+
+  `tfl.js` also accepts an **optional `direction`** query param (`inbound`|`outbound`), validated on its own and appended as a sibling of `app_key` — it never enters `path`, so `ALLOWED` is unchanged. It exists because a branch/junction Timetable stop (e.g. Merton Park `940GZZCRMTP`) returns a *disambiguation* rather than a schedule unless a direction is supplied. Any other value → 400. The frontend passes it by appending `&direction=…` to the `path` string in `fetchTimetable`, which lands it as a separate query param on `/api/tfl`.
 
 ---
 
@@ -128,7 +130,10 @@ Single unified array. Each entry:
   ],
 
   tram: [                        // omit if no tram
-    { line, stopId, label, pillClass, inboundOnly? }
+    { line, stopId, label, pillClass, inboundOnly?,
+      timetable?,                // bool — also render a scheduled Departing card
+      timetableDir?,             // 'inbound' | 'outbound' — direction passed to the Timetable API
+    }
   ],
 
   buses: {                       // omit if no buses
@@ -160,8 +165,8 @@ Each bus stop object:
 | 3 | London Waterloo | WAT | Jubilee · Bakerloo · Northern · W&C | — | — |
 | 4 | Vauxhall | VXH (dynamic) | Victoria | — | — |
 | 5 | New Malden | NEM | — | — | 2 subgroups |
-| 6 | Wimbledon | WIM | District | Tramlink (940GZZCRWMB) | 2 subgroups |
-| 7 | South Wimbledon | — | Northern | Merton Park (inboundOnly) | flat (2 stops) |
+| 6 | Wimbledon | WIM | District | Tramlink (940GZZCRWMB, +timetable) | 2 subgroups |
+| 7 | South Wimbledon | — | Northern | Merton Park (inboundOnly, +timetable) | flat (2 stops) |
 | 8 | Colliers Wood | — | Northern | — | flat |
 | 9 | Norbiton | NBT | — | — | flat (2 stops) |
 | 10 | Clapham Junction | CLJ (dynamic) | — | — | flat (2 stops, `filterDest`) |
@@ -305,12 +310,12 @@ rather than the lie "No upcoming arrivals".
 | `renderNRData(loc, nrData)` | Full NR render: dynamic routing, grouped/platform view, alert banner |
 | `fetchLineArrivals(items)` | Shared TfL fetch: maps array of `{line,stopId}` configs to arrival arrays |
 | `fetchAndRenderTube(loc)` | Fetches TfL tube arrivals via `fetchLineArrivals`, writes to `#tube-{id}` only |
-| `fetchTimetable(line, stopId)` | Fetches `Line/{line}/Timetable/{stopId}` once and caches in `S.ttCache` (static for the day); resolves `null` on failure so the arrivals card still renders |
+| `fetchTimetable(line, stopId, direction?)` | Fetches `Line/{line}/Timetable/{stopId}` once and caches in `S.ttCache` (static for the day, keyed by line+stop+direction); resolves `null` on failure so the arrivals card still renders. `direction` (branch/terminus trams) is appended as `&direction=…` so it rides through as a sibling query param on `/api/tfl` |
 | `renderTubeData(loc, tubeData, timetables)` | Handles `mergeLines` (Blackfriars), Wimbledon terminus (two cards), standard |
 | `dedupeTerminusArrivals(arrivals)` | Collapses TfL's per-platform duplicate predictions at a terminus into one entry per train; returns `{arrival, plat}[]` sorted by `timeToStation`, `plat === null` when TfL has not assigned one |
 | `scheduledDepartures(tt, windowMins)` | Timetable payload → `{mins, time, dest}[]` within the window. Handles the string/number `intervalId` mismatch and `hour >= 24` (post-midnight) |
 | `fetchAndRenderTram(loc)` | Fetches TfL tram arrivals via `fetchLineArrivals`, writes to `#tram-{id}` only |
-| `renderTramData(loc, tramData)` | Handles `inboundOnly` flag (Merton Park) |
+| `renderTramData(loc, tramData, timetables)` | Handles `inboundOnly` flag (Merton Park); when `lc.timetable` is set, renders a live Arriving card plus a scheduled Departing card from the timetable (Wimbledon, Merton Park) |
 | `fetchBusStop(key)` | Fetches TfL arrivals, writes to `#deps-{key}` only; drops arrivals matching `stop.filterDest`; if no arrivals, checks closure via `fetchBusClosure` |
 | `fetchBusClosure(naptan)` | Fetches `StopPoint/{naptan}/Disruption`; returns the active `type:"Closure"` record (latest reopen date) or `null` |
 | `refreshBusStop(key)` | Spins per-stop ↻, calls `fetchBusStop` |
@@ -343,6 +348,7 @@ rather than the lie "No upcoming arrivals".
 - **Vauxhall NR** — platforms not in `['6','8']` routed dynamically by destination: contains "London Waterloo" → London Waterloo group, others → Waterloo-Reading line group
 - **Clapham Junction platform 17** — SN services → Brighton Main Line, LO services → London Overground (via `dynamicPlatforms`)
 - **Merton Park tram (South Wimbledon)** — fetched via `Line/tram/Arrivals`, filtered to `direction === 'inbound'` via `inboundOnly: true`
+- **Tram scheduled departures (Wimbledon & Merton Park)** — both carry `timetable:true, timetableDir:'inbound'`, so `renderTramData` renders a live **Arriving** card plus a scheduled **Departing** card (`scheduledDepartures`, 30-min window, capped at 6, "not adjusted for delays"). This exists because the inbound tram direction has little-to-no live prediction coverage: **Wimbledon** is a terminus (TfL emits `outbound`/arriving predictions only — no departing ones), and **Merton Park**'s inbound branch is predicted sparsely, so the live Arriving card is frequently empty while the timetable is full. The Departing card is **scheduled-only**: destinations come straight from the timetable, so the branch-alternation trap (Elmers End / Beckenham Junction) that sinks a live+timetable *hybrid* at Wimbledon District does **not** apply — do not attempt such a join here either. Merton Park is a mid-route junction, so its Timetable request **requires** `direction` (bare request → disambiguation); see the `direction` param note under *APIs*.
 - **Clapham Junction buses** — both stops set `filterDest:'Clapham Junction'`, so buses terminating at Clapham Junction (e.g. 35, 39, 49, 295, C3) are dropped from the live list; this flag is per-stop and affects no other location
 - **Bus stops with no letter** — `letter: ''` renders an empty gradient badge
 - **Closed bus stops** — when a stop returns no arrivals, `fetchBusStop` checks `StopPoint/{naptan}/Disruption`. A `type:"Closure"` record renders a red "Stop closed until {date}" notice; stops with no arrivals and no closure record keep the neutral "No upcoming departures" state. TfL only flags temporary hooded closures this way.
