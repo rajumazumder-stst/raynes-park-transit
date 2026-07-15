@@ -86,9 +86,10 @@ async function readConfig() {
     all(/line:'([^']+)',\s*stopId:'([^']+)'/g).map((m) => [`${m[1]}|${m[2]}`, { line: m[1], stopId: m[2] }]),
   ).values()];
 
-  // tube entries carrying `timetable:true` need the Timetable path in tfl.js's ALLOWED regex
-  const timetables = all(/line:'([^']+)',\s*stopId:'([^']+)'[^}]*timetable:\s*true/g)
-    .map((m) => ({ line: m[1], stopId: m[2] }));
+  // entries carrying `timetable:true` need the Timetable path in tfl.js's ALLOWED regex;
+  // `timetableDir` (trams at branch/terminus stops) rides through as a `direction` param
+  const timetables = all(/line:'([^']+)',\s*stopId:'([^']+)'[^}]*timetable:\s*true(?:[^}]*timetableDir:'([^']+)')?/g)
+    .map((m) => ({ line: m[1], stopId: m[2], direction: m[3] }));
 
   if (!naptans.length || !crs.length || !lines.length) {
     throw new Error('Parsed 0 of some config type from public/index.html — did the LOCATIONS format change?');
@@ -162,17 +163,20 @@ async function checkTrains(crsList) {
   }));
 }
 
-// Terminus departure boards read Line/{line}/Timetable/{stopId}. That path is a
-// recent addition to tfl.js's ALLOWED regex, so a deployment predating it 400s.
+// Terminus / branch departure boards read Line/{line}/Timetable/{stopId}. That path is a
+// recent addition to tfl.js's ALLOWED regex, so a deployment predating it 400s. Branch stops
+// (trams) also need `&direction=`; a deployment predating that returns a disambiguation.
 async function checkTimetables(items) {
   if (!items.length) return;
-  console.log(`\nTimetables (${items.length} terminus board${items.length > 1 ? 's' : ''})`);
-  for (const { line, stopId } of items) {
-    const label = `${line} @ ${stopId}`;
+  console.log(`\nTimetables (${items.length} departure board${items.length > 1 ? 's' : ''})`);
+  for (const { line, stopId, direction } of items) {
+    const label = `${line} @ ${stopId}${direction ? ` (${direction})` : ''}`;
     await attempt(label, async () => {
-      const { status, body } = await get(`/api/tfl?path=Line/${line}/Timetable/${stopId}`);
+      const dirQuery = direction ? `&direction=${direction}` : '';
+      const { status, body } = await get(`/api/tfl?path=Line/${line}/Timetable/${stopId}${dirQuery}`);
       if (status === 400) return no(`${label} → 400; this deployment's tfl.js ALLOWED regex lacks the Timetable path`);
       if (status !== 200) return no(`${label} → HTTP ${status}`);
+      if (body?.disambiguation) return no(`${label} → disambiguation; this deployment's tfl.js lacks direction support`);
       const route = body?.timetable?.routes?.[0];
       if (!route?.schedules?.length) return no(`${label} → no schedules in payload`);
       if (!body?.stops?.length) return no(`${label} → no stops[]; destinations cannot be resolved to names`);

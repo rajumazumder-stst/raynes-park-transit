@@ -20,8 +20,19 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Optional direction, for branch/terminus Timetable requests that TfL will not
+  // resolve without one (e.g. Merton Park, a mid-route junction). Validated on its
+  // own and appended as a sibling query param, so it never enters `path` and cannot
+  // widen the ALLOWED allow-list. Ignored by upstream on non-Timetable requests.
+  const direction = req.query.direction;
+  if (direction && !/^(inbound|outbound)$/.test(direction)) {
+    res.status(400).json({ error: 'Invalid direction parameter' });
+    return;
+  }
+  const dirQuery = direction ? `&direction=${direction}` : '';
+
   try {
-    const upstream = await fetch(`${TFL_BASE}/${path}?app_key=${process.env.TFL_KEY}`, {
+    const upstream = await fetch(`${TFL_BASE}/${path}?app_key=${process.env.TFL_KEY}${dirQuery}`, {
       signal: AbortSignal.timeout(10000),
     });
 
