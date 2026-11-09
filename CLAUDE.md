@@ -75,13 +75,13 @@ vercel.json                Routing config (do not modify)
 
 ### Navigation
 
-A single dropdown selector with `‹` `›` prev/next arrow buttons and a `↻` refresh button. 15 locations in order:
+A single dropdown selector with `‹` `›` prev/next arrow buttons and a `↻` refresh button. 16 locations in order:
 
-> Raynes Park, Wimbledon Chase, London Waterloo, Vauxhall, New Malden, Wimbledon, South Wimbledon, Colliers Wood, Norbiton, Clapham Junction, Kingston, Putney, Staines, Blackfriars, Waterloo East
+> Raynes Park, Wimbledon Chase, London Waterloo, Vauxhall, New Malden, Wimbledon, South Wimbledon, Colliers Wood, Tooting Broadway, Norbiton, Clapham Junction, Kingston, Putney, Staines, Blackfriars, Waterloo East
 
 ### Skeleton-first rendering
 
-`init()` builds all 15 location panels into the DOM before any fetch runs, using `buildPanelSkeleton(loc)`. Each transport section gets a stable container:
+`init()` builds all 16 location panels into the DOM before any fetch runs, using `buildPanelSkeleton(loc)`. Each transport section gets a stable container:
 
 - `#nr-{id}` — National Rail
 - `#tube-{id}` — Tube
@@ -168,13 +168,14 @@ Each bus stop object:
 | 6 | Wimbledon | WIM | District | Tramlink (940GZZCRWMB, +timetable) | 2 subgroups |
 | 7 | South Wimbledon | — | Northern | Merton Park (inboundOnly, +timetable) | flat (2 stops) |
 | 8 | Colliers Wood | — | Northern | — | flat |
-| 9 | Norbiton | NBT | — | — | flat (2 stops) |
-| 10 | Clapham Junction | CLJ (dynamic) | — | — | flat (2 stops, `filterDest`) |
-| 11 | Kingston | KNG | — | — | 2 subgroups |
-| 12 | Putney | PUT | District | — | flat |
-| 13 | Staines | SNS | — | — | — |
-| 14 | Blackfriars | BFR | District + Circle | — | — |
-| 15 | Waterloo East | WAE | — | — | — |
+| 9 | Tooting Broadway | — | Northern | — | flat (1 stop) |
+| 10 | Norbiton | NBT | — | — | flat (2 stops) |
+| 11 | Clapham Junction | CLJ (dynamic) | — | — | flat (2 stops, `filterDest`) |
+| 12 | Kingston | KNG | — | — | 2 subgroups |
+| 13 | Putney | PUT | District | — | flat |
+| 14 | Staines | SNS | — | — | — |
+| 15 | Blackfriars | BFR | District + Circle | — | — |
+| 16 | Waterloo East | WAE | — | — | — |
 
 ### NR groups
 
