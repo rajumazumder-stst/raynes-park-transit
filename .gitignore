@@ -4,3 +4,4 @@ LDBWS_Documentation.md
 .env.local
 .vercel
 test-keys.js
+.DS_Store
